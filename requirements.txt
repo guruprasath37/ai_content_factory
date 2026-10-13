@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+edge-tts
+pillow
+numpy
+python-dotenv
+requests
+# YouTube publishing and research
+google-auth
+google-auth-oauthlib
+google-api-python-client
+# Lets pydantic/FastAPI read "X | None" hints on Python 3.9
+eval_type_backport; python_version < "3.10"

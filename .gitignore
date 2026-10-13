@@ -1,0 +1,30 @@
+# secrets - never commit
+.env
+*.p8
+*service*account*.json
+client_secret*.json
+
+# generated / local data
+content
+assets/pixabay/
+assets/ai_clips/
+*.sqlite3
+*.sqlite3-journal
+
+# big downloads
+models
+
+# python
+.venv
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# editor / os
+.vscode/
+.idea/
+.DS_Store
+nohup.out
+credentials/*
+!credentials/.gitkeep

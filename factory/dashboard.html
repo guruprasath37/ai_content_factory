@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Content Factory</title>
+<style>
+:root{--bg:#0b1020;--card:#151d34;--line:#2b385a;--text:#f4f6ff;--muted:#aab4d0;--accent:#8de6cc;--warn:#ffcc9e;--bad:#ff8a9b}
+*{box-sizing:border-box}body{font:15px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--text);max-width:1100px;margin:24px auto;padding:0 16px}
+h1{margin:0 0 2px}h2{margin:0 0 10px;font-size:18px}.muted{color:var(--muted)}a{color:var(--accent)}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0;border-bottom:1px solid var(--line);padding-bottom:10px}
+nav button{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:600}nav button.on{background:var(--accent);color:#102126;border-color:var(--accent)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
+.scriptbox{border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}.scriptbox h3{margin:0 0 4px}.scriptbox ol{margin:10px 0;padding-left:22px}.scriptbox li{margin:0 0 8px}.scriptbox .vis{font-size:12px}.scriptbox .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}.scriptbox .gem{border:1px dashed var(--line);border-radius:10px;padding:10px;margin:10px 0}.scriptbox .gem textarea{width:100%;box-sizing:border-box;font-size:12px}
+input,select,button,textarea{font:inherit;border-radius:8px;padding:9px 11px;border:1px solid #344362}input,select,textarea{background:var(--bg);color:var(--text);max-width:100%}
+button{cursor:pointer;background:var(--accent);color:#102126;border:0;font-weight:700}button.alt{background:var(--warn)}button.ghost{background:transparent;color:var(--text);border:1px solid #344362}button.bad{background:var(--bad)}button:disabled{opacity:.5;cursor:wait}
+[hidden]{display:none!important}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.row>label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.job{display:grid;grid-template-columns:150px 1fr;gap:14px}.job video{width:150px;border-radius:10px;background:#000}@media(max-width:600px){.job{grid-template-columns:1fr}}
+.pill{display:inline-block;font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--accent);margin-right:6px}
+.pill.pending_review{color:#ffe28a}.pill.failed,.pill.render_failed,.pill.publish_failed,.pill.rejected{color:var(--bad)}.pill.published{color:#9bff9b}
+.stat{font-size:28px;font-weight:800}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600;font-size:13px}
+pre{white-space:pre-wrap;margin:0;font-size:12.5px;color:#d6def7}.bar{display:flex;align-items:end;gap:4px;height:80px}.bar div{flex:1;background:var(--accent);border-radius:4px 4px 0 0;min-height:2px}
+.flags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}.flag{font-size:12px;padding:3px 9px;border-radius:8px;border:1px solid var(--line);white-space:nowrap}
+.flag.llm{color:#9ec5ff;border-color:#3a5a99}.flag.ltx{color:#d6b3ff;border-color:#6b4a99}.flag.kl{color:#7fe3ff;border-color:#2f7f99}.flag.af{color:#ffe17f;border-color:#99852f}.flag.gm{color:#b9f6ca;border-color:#3f8a6a}.flag.stock{color:#9bffb0;border-color:#3f8a55}.flag.drawn{color:#ffd28a;border-color:#8a6a3a}.flag.voice{color:#ffb3d9;border-color:#8a3f66}.flag.ff{color:#c9d3ea}.flag.warn{color:#ffcc9e;border-color:#b3743a;background:#2a1d10}
+.tab{display:none}.tab.on{display:block}.chk{display:flex;gap:6px;align-items:center;flex-direction:row!important;color:var(--text)!important;font-size:14px!important}
+</style></head><body>
+<h1>AI Content Factory</h1>
+<div class="muted" id="sys">Checking system…</div>
+<nav id="nav"></nav>
+
+<section class="tab" id="t-create"><div class="card"><h2>Create a video</h2>
+<div class="row"><label>Series<select id="series"></select></label>
+<label>Duration (s)<input id="duration" type="number" min="15" max="180" step="1" value="30" list="durPresets" style="width:90px"><datalist id="durPresets"><option value="20"><option value="30"><option value="45"><option value="60"><option value="90"><option value="120"><option value="180"></datalist></label>
+<label>Language<select id="language"><option>English</option><option>Hindi</option><option>Tamil</option></select></label></div>
+<p><label class="muted">Topic (optional — the AI picks one if empty)<br><input id="topic" style="width:min(100%,560px)" placeholder="e.g. why the sky is blue"></label></p>
+<p class="row"><label class="chk muted"><input type="checkbox" id="aiVideo"> AI video clips</label> <label>Engine<select id="aiProvider"><option value="ltx">LTX-Video — free, local GPU (~1 min per scene)</option><option value="kling" id="klOpt">Kling — paid API (best quality)</option><option value="apiframe" id="afOpt">Apiframe — API credits (Seedance, Kling, Veo…)</option><option value="gemini">Gemini — free, 1 scene: you make the clip in Gemini and upload it</option></select></label></p><div class="row" id="modeRow" style="margin:6px 0"><span class="muted">Generate each scene from:</span>
+<label class="chk"><input type="radio" name="aiMode" value="t2v" checked> <b>Script → video</b> <span class="muted">(the scene text alone)</span></label>
+<label class="chk"><input type="radio" name="aiMode" value="i2v"> <b>Image → video</b> <span class="muted">(animates a matching photo)</span></label></div>
+<div class="muted" id="aiNote" style="margin:-6px 0 10px">Each scene falls back automatically: Kling → LTX → stock footage → drawn animation.</div>
+<button id="goBtn" onclick="createNow()">1 · Write script</button> <span class="muted" id="msg"></span>
+<div id="scriptBox" class="scriptbox" hidden></div>
+<p class="muted">Step 1 writes the script so you can read it first; step 2 renders the video only after you approve it. Each finished video shows exactly what made it. Nothing is published until you approve the video too.</p></div></section>
+
+<section class="tab" id="t-auto"><div class="card"><h2>Autopilot</h2>
+<p class="muted">Every interval it takes ideas from the bank (brainstorming more when empty), writes scripts, renders videos and parks them in <b>Review</b>. It never publishes by itself.</p>
+<div class="row"><label class="chk"><input type="checkbox" id="apOn"> Enabled</label>
+<label>Every (hours)<input id="apInt" type="number" min="0.25" step="0.25" style="width:100px"></label>
+<label>Videos per run<input id="apN" type="number" min="1" max="20" style="width:100px"></label>
+<label>Length (s)<input id="apDur" type="number" min="15" max="180" list="durPresets" style="width:90px"></label>
+<label class="chk"><input type="checkbox" id="apAI"> AI video clips</label>
+<label>Engine<select id="apProv"><option value="ltx">LTX (free)</option><option value="kling">Kling (paid)</option><option value="apiframe">Apiframe (credits)</option></select></label>
+<label>Generate from<select id="apMode"><option value="t2v">Script → video</option><option value="i2v">Image → video</option></select></label>
+<label>Pause when review queue ≥<input id="apMax" type="number" min="1" style="width:90px"></label></div>
+<p class="row" id="apSeries"></p>
+<button onclick="saveAuto()">Save</button> <button class="alt" onclick="runNow()">Run a batch now</button> <span class="muted" id="apMsg"></span></div>
+<div class="card"><h2>Status</h2><div id="apState" class="muted"></div><pre id="apLog" style="margin-top:8px"></pre></div></section>
+
+<section class="tab" id="t-jobs"><div class="card"><h2>Daily plan</h2>
+<p class="muted">Schedules approved videos on YouTube: <b>2 licensed re-posts + 1 of your own</b> (oldest approved first). Each is uploaded now as private and YouTube publishes it at its time, so your computer can be off then.</p>
+<div class="row"><label>Day<input type="date" id="plDay"></label><label>Re-post 1<input type="time" id="plT1" value="09:00"></label><label>Your own<input type="time" id="plT2" value="14:00"></label><label>Re-post 2<input type="time" id="plT3" value="19:00"></label><button id="plBtn" onclick="planDay()">📅 Schedule the day</button></div>
+<div class="muted" id="plMsg" style="margin-top:6px"></div></div><div class="card row"><label>Show<select id="jobFilter" onchange="loadJobs()"><option value="">All</option><option value="pending_review" selected>Needs review</option><option value="approved">Approved</option><option value="published">Published</option><option value="failed">Failed</option><option value="rejected">Rejected</option></select></label>
+<button class="ghost" onclick="loadJobs()">Refresh</button><span class="muted">Stock footage courtesy of <a href="https://pixabay.com" target="_blank" rel="noopener">Pixabay</a></span></div><div id="jobs"></div></section>
+
+<section class="tab" id="t-stats"><div class="card row"><button onclick="refreshStats()" id="stBtn">Refresh platform stats</button><span class="muted" id="stMsg"></span></div>
+<div class="grid" id="stCards"></div>
+<div class="card"><h2>By series</h2><table id="stSeries"></table></div>
+<div class="card"><h2>Videos made, last 14 days</h2><div class="bar" id="stDaily"></div></div>
+<div class="card"><h2>Top videos</h2><table id="stTop"></table></div></section>
+
+<section class="tab" id="t-niche"><div class="card"><h2>Find a niche</h2>
+<p class="muted">Looks at what short videos got the most views on YouTube in the last weeks, and whether <b>small channels</b> are winning there (proof a new channel can too). Uses your Google project's read-only YouTube access.</p>
+<div class="row"><label>Topics to check (comma separated — empty = broad scan)<input id="nKw" style="width:min(100%,520px)" placeholder="e.g. ai tools, space facts, budget travel"></label>
+<label>Region<input id="nReg" value="IN" maxlength="2" style="width:70px"></label><label>Last (days)<input id="nDays" type="number" value="30" style="width:80px"></label>
+<button id="nBtn" onclick="nicheResearch()">Research YouTube</button></div><div class="muted" id="nMsg" style="margin-top:8px"></div></div>
+<div class="card" id="nRes" style="display:none"><h2>What's working</h2><table id="nTable"></table></div>
+<div class="card" id="nPropCard" style="display:none"><h2>Niches the AI recommends</h2>
+<label class="muted">About you / constraints (optional)<textarea id="nProfile" rows="2" style="width:100%" placeholder="e.g. I speak Tamil and English, faceless channel, want evergreen topics"></textarea></label>
+<p><button onclick="nicheProposals()" id="nPBtn">Suggest niches with AI</button></p><div class="grid" id="nProps"></div></div></section>
+
+<section class="tab" id="t-download"><div class="card"><h2>Download an Instagram video</h2>
+<p class="muted">Paste the link of a post or reel from a <b>public</b> account. Use downloads for reference, research or content you own or have permission to use — re-posting someone else's video without permission can break Instagram's terms and copyright.</p>
+<div class="row"><label style="flex:1">Post or reel link<input id="dlUrl" style="width:100%;box-sizing:border-box" placeholder="https://www.instagram.com/reel/…"></label><button id="dlBtn" onclick="downloadIg()">⬇ Download</button></div>
+<p class="muted" id="dlMsg"></p></div>
+<div class="card"><h2>Downloaded</h2><div id="dlList" class="muted">Nothing yet.</div></div></section>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(url,method='GET',body){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});let d;try{d=await r.json()}catch{d={}}if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:JSON.stringify(d.detail||d));return d}
+let SERIES=[],KL=null,AF=null;const TABS=[['create','Create'],['auto','Autopilot'],['jobs','Review'],['stats','Analytics'],['niche','Niche'],['download','Download']];
+$('nav').innerHTML=TABS.map(([k,l])=>`<button id="b-${k}" onclick="show('${k}')">${l}</button>`).join('');
+function flagsFor(j){const p=j.provenance,sc=j.script_json||{},f=[],fl=(c,t,tip)=>`<span class="flag ${c}" title="${esc(tip||'')}">${t}</span>`;
+ const src=(sc.script_source||'').split(':'),sp=(p&&p.script&&p.script.provider)?p.script:{provider:sc.script_provider||src[0]||null,model:sc.script_model||src.slice(1).join(':')||null,fell_back_from:sc.script_fell_back_from};
+ if(sp.provider){const m=(sp.model||'').split('/').pop();f.push(fl('llm',`✍ ${esc(sp.provider)}${m?' · '+esc(m):''}`,'Script written by'));
+  if(sp.fell_back_from)f.push(fl('warn',`⚠ script fell back from ${esc(sp.fell_back_from.split(':')[0])}`,'The preferred model failed, so the next one in the chain wrote it'))}
+ if(p&&p.licensed){const L=p.licensed,P=L.permission||{};f.push(fl('gm',`🤝 @${esc(L.handle||'creator')} · permission: ${esc(P.how||'?')} ${esc(P.date||'')}`,'Re-posted unchanged with the creator\'s permission; credit + original link are added when published'));return `<div class="flags">${f.join('')}</div>`}
+ if(p){const c=p.visuals.counts,n=p.visuals.sources.length;
+  if(c.kling)f.push(fl('kl',`🎞 Kling ${p.visuals.ai_mode==='i2v'?'image→video':'script→video'} ×${c.kling}`,'Scenes generated by the Kling API (paid)'));
+  if(c.gemini)f.push(fl('gm','🎞 Gemini clip (uploaded)','The scene is the clip you generated in Gemini, slowed to natural speed'));
+  if(c.apiframe)f.push(fl('af',`🎞 Apiframe ${p.visuals.ai_mode==='i2v'?'image→video':'script→video'} ×${c.apiframe}`,'Scenes generated through the Apiframe API (credits)'));
+  if(c.ltx)f.push(fl('ltx',`🎞 LTX ${p.visuals.ai_mode==='t2v'?'script→video':'image→video'} ×${c.ltx}`,'Scenes generated by local LTX-Video'));
+  if(c.stock)f.push(fl('stock',`🎬 stock ×${c.stock}`,'Scenes from Pixabay footage'));
+  if(c.drawn)f.push(fl('drawn',`✏ drawn ×${c.drawn}`,'Scenes drawn by the built-in animation engine'));
+  const ai=(c.ltx||0)+(c.kling||0)+(c.apiframe||0)+(c.gemini||0);if(p.visuals.ai_requested&&ai<n)f.push(fl('warn',`⚠ AI clips: ${ai}/${n} scenes`,'AI video was requested but some scenes fell back'));
+  f.push(fl('voice',`🔊 ${esc(p.voice.engine)} · ${esc(p.voice.voice)}`,'Voice-over'));
+  f.push(fl('ff',`⚙ ffmpeg${p.assembly.version?' '+esc(p.assembly.version):''} · ${p.assembly.resolution}`,'Final assembly'))}
+ return f.length?`<div class="flags">${f.join('')}</div>`:''}
+function syncMode(){const eng=$('aiProvider').value,kl=eng!=='ltx',m=document.querySelector('input[name=aiMode]:checked').value;
+ $('modeRow').hidden=eng==='gemini';
+ if(eng==='gemini'){$('aiNote').textContent='Gemini: the script is ONE continuous scene on a high-demand topic. You get a ready-to-paste Gemini prompt, make the clip in Gemini (free), upload it, and the app slows it to natural speed (1.5x for a 10 s clip at 15 s) and keeps its sound under the narration.';return}
+ $('aiNote').textContent=(kl?(eng==='apiframe'?'Apiframe spends credits per clip':'Kling is paid per clip')+'; scenes it does not cover fall back to local LTX, then stock footage, then drawn animation. ':'LTX-Video is free and runs on your GPU; scenes it fails fall back to stock footage, then drawn animation. ')+
+  ($('aiNote').dataset.hint?$('aiNote').dataset.hint+' ':'')+(!kl&&m==='t2v'?'Tip: the small local model keeps the subject far better in Image → video; Script → video moves more but can lose the subject.':'')}
+function seriesHint(){const s=SERIES.find(x=>x.id===$('series').value);if(s&&s.ai_default){$('aiVideo').checked=true;$('duration').value=18;$('aiNote').dataset.hint='This is a visual-first format: one continuous AI shot (a fast-motion 10 s clip slowed to natural speed), so 15-18 s is the sweet spot. Stock footage will only loosely match.'}else delete $('aiNote').dataset.hint;syncMode()}
+function pickEngine(){const kl=$('aiProvider').value!=='ltx';if($('aiProvider').value==='gemini'){$('aiVideo').checked=true;$('duration').value=15}document.querySelector(`input[name=aiMode][value=${kl?'t2v':'i2v'}]`).checked=true;syncMode()}   // sensible default per engine; the user can still change it
+try{const t=new Date(Date.now()+864e5);document.addEventListener('DOMContentLoaded',()=>{const d=$('plDay');if(d&&!d.value)d.value=t.toISOString().slice(0,10)})}catch{}
+function show(k){TABS.forEach(([t])=>{$('t-'+t).classList.toggle('on',t===k);$('b-'+t).classList.toggle('on',t===k)});location.hash=k;
+ ({auto:loadAuto,jobs:loadJobs,stats:loadStats,niche:loadNiche,download:loadDownloads})[k]?.()}
+setInterval(()=>{if($('t-auto').classList.contains('on'))loadAuto(true)},4000);
+
+async function init(){
+ try{const h=await api('/health');const l=h.llm;$('sys').innerHTML=`LLM: <b>${esc(l.provider)}${l.model?' · '+esc(l.model):''}</b> ${l.ready?'':'<span style="color:var(--bad)">(no model — run <code>ollama pull qwen2.5:7b</code>)</span>'} · ffmpeg ${h.ffmpeg?'✓':'✗'} · AI video: LTX ${h.ai_video.ready?'✓':'✗'} · Kling ${h.kling.ready?'✓':'✗'} · Apiframe ${h.apiframe.ready?'✓':'✗'} · stock footage ${h.stock_footage?'✓':'✗'}`}catch(e){$('sys').textContent=e.message}
+ try{const h=await api('/health');KL=h.kling;AF=h.apiframe}catch{};$('klOpt').textContent=KL&&KL.ready?`Kling — paid (${KL.model} ${KL.quality}, max ${KL.max_clips_per_video} clips/video, ${KL.clips_today}/${KL.daily_clip_limit} today)`:'Kling — not configured (add keys to .env)';$('afOpt').textContent=AF&&AF.ready?`Apiframe — credits (${AF.model} ${AF.resolution}, max ${AF.max_clips_per_video} clips/video, ${AF.clips_today}/${AF.daily_clip_limit} today)`:AF&&AF.configured?`Apiframe — unsupported model ${AF.model} (use seedance-* or kling-*)`:'Apiframe — not configured (add APIFRAME_API_KEY to .env)';SERIES=await api('/series');const opts=SERIES.map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join('');$('series').innerHTML=opts;$('series').onchange=seriesHint;seriesHint();$('aiProvider').onchange=pickEngine;document.querySelectorAll('input[name=aiMode]').forEach(r=>r.onchange=syncMode);pickEngine();
+ show(location.hash.slice(1)||'create')}
+
+let DRAFT=null,SEEN=[];   // SEEN: titles already shown this session, so 'Next prompt' always brings a new idea
+   // the script waiting for approval: {id, script}
+async function createNow(){const b=$('goBtn'),m=$('msg');b.disabled=true;try{
+ const dur=Math.round(+$('duration').value);if(!(dur>=15&&dur<=180))throw new Error('Duration must be 15–180 seconds');
+ if(DRAFT)await discardDraft(true);   // writing a new script replaces the unapproved one
+ m.textContent='Writing script with the AI…';$('scriptBox').hidden=true;
+ const j=await api('/generate','POST',{avoid:SEEN.slice(-15),series:$('series').value,topic:$('topic').value||null,duration_seconds:dur,language:$('language').value,ai_video:$('aiVideo').checked,ai_provider:$('aiProvider').value,ai_mode:document.querySelector('input[name=aiMode]:checked').value});
+ DRAFT={id:j.id,script:j.script};SEEN.push(j.script.title);showDraft();m.textContent='Script ready — read it below, then approve to render.'}catch(e){m.textContent=e.message}b.disabled=false}
+function showDraft(){const s=DRAFT.script,sc=s.scenes||[],words=sc.reduce((n,x)=>n+x.narration.split(/\s+/).length,0);
+ const eng=s.ai_video?`AI clips: ${esc(s.ai_provider)} · ${s.ai_mode==='i2v'?'image→video':'script→video'}`:'No AI clips (stock footage / drawn animation)';
+ $('scriptBox').innerHTML=`<div class="muted" style="font-size:12px">STEP 2 · REVIEW THE SCRIPT</div><h3>${esc(s.title)}</h3><div class="muted">${esc(s.description||'')}</div>
+  <ol>${sc.map(x=>`<li>${esc(x.narration)}<div class="muted vis">🎬 ${esc(x.visual||'')}</div></li>`).join('')}</ol>
+  <div class="muted" style="font-size:12px">${sc.length} scenes · ${words} words · target ${s.duration_seconds}s · ${esc(s.language)} · ${eng}${(s.hashtags||[]).length?' · '+s.hashtags.map(h=>'#'+esc(h)).join(' '):''}</div>
+  ${(s.revisions||[]).length?`<div class="muted" style="font-size:12px">✎ Revised: ${s.revisions.map(r=>'“'+esc(r)+'”').join(' → ')}</div>`:''}
+  <div class="muted" style="font-size:12px">These settings are saved with the script; change them above and press Next prompt to use different ones.</div>${flagsFor({script_json:s})}
+  ${s.single_shot?`<div class="gem"><b>Make the clip in Gemini</b> <span class="muted" style="font-size:12px">1) copy the prompt · 2) paste it at gemini.google.com (Video) · 3) download the video · 4) upload it here</span>
+   <textarea id="gemPrompt" rows="9" readonly>${esc(s.gemini_prompt||'')}</textarea>
+   <div class="acts"><button class="ghost" onclick="copyGem()">⧉ Copy prompt</button><input type="file" id="gemFile" accept="video/*"><button class="ghost" id="gemUp" onclick="uploadGem()">⬆ Upload clip</button><span class="muted" id="gemMsg" style="font-size:12px"></span></div></div>`:''}
+  <div class="acts"><button id="renderBtn" onclick="renderDraft()">2 · Approve &amp; render video</button><button class="ghost" onclick="createNow()" title="A completely different idea with the same settings">↻ Next prompt</button><button class="ghost" onclick="toggleRevise()">✎ Rewrite with instructions</button><button class="ghost" onclick="discardDraft()">✕ Discard</button></div>
+  <div id="reviseBox" hidden style="margin-top:10px"><textarea id="reviseText" rows="3" maxlength="1000" style="width:100%;box-sizing:border-box" placeholder="e.g. make it funnier, give the robot a name, end with a question, use simpler words"></textarea>
+  <div class="acts"><button id="reviseBtn" onclick="reviseDraft()">Apply changes</button><span class="muted" style="font-size:12px">Ctrl/⌘+Enter</span></div></div>`;
+ $('reviseText').onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))reviseDraft()};
+ if(s.single_shot)api('/clip/'+DRAFT.id).then(c=>{if(c.uploaded)$('gemMsg').textContent=`✓ clip uploaded (${c.seconds}s)`;else $('renderBtn').title='Upload the Gemini clip first'}).catch(()=>{});
+ $('scriptBox').hidden=false}
+async function renderDraft(){const m=$('msg'),id=DRAFT.id;document.querySelectorAll('#scriptBox button,#goBtn').forEach(x=>x.disabled=true);
+ try{m.textContent='Rendering video… (AI clips can take several minutes)';await api('/render/'+id,'POST');const done=await api('/jobs/'+id);
+  DRAFT=null;$('scriptBox').hidden=true;m.innerHTML='Done — made with:'+flagsFor(done)+' Opening Review…';$('jobFilter').value='pending_review';setTimeout(()=>show('jobs'),4000)}
+ catch(e){m.textContent='Render failed: '+e.message+' — you can press Approve & render again.'}
+ document.querySelectorAll('#scriptBox button,#goBtn').forEach(x=>x.disabled=false)}
+async function copyGem(){try{await navigator.clipboard.writeText($('gemPrompt').value);$('gemMsg').textContent='Prompt copied — paste it into Gemini.'}catch{$('gemPrompt').select();$('gemMsg').textContent='Select-all done — press ⌘C / Ctrl+C.'}}
+async function uploadGem(){const f=$('gemFile').files[0],m=$('gemMsg');if(!f){m.textContent='Choose the video you downloaded from Gemini first.';return}
+ $('gemUp').disabled=true;m.textContent=`Uploading ${(f.size/1048576).toFixed(1)} MB…`;
+ try{const r=await fetch('/clip/'+DRAFT.id,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.detail||('HTTP '+r.status));
+  m.textContent=`✓ clip uploaded (${d.seconds}s, ${d.width}×${d.height}${d.has_audio?', with sound':', no sound'}) — now approve & render.`;$('renderBtn').title=''}
+ catch(e){m.textContent='Upload failed: '+e.message}$('gemUp').disabled=false}
+async function downloadIg(){const u=$('dlUrl').value.trim(),m=$('dlMsg'),b=$('dlBtn');if(!u){m.textContent='Paste an Instagram link first.';return}
+ b.disabled=true;m.textContent='Downloading… (usually 5-20 seconds)';
+ try{const d=await api('/downloads/instagram','POST',{url:u});m.textContent=`✓ Downloaded ${d.items.length} video${d.items.length>1?'s':''}.`;$('dlUrl').value='';loadDownloads()}catch(e){m.textContent=e.message}b.disabled=false}
+async function loadDownloads(){try{const L=await api('/downloads');$('dlList').innerHTML=L.length?L.map(v=>`<div class="row" style="align-items:flex-start;margin:0 0 14px">
+  <video src="/downloads/file/${encodeURIComponent(v.file)}" controls preload="metadata" style="width:160px;max-width:40vw;border-radius:8px;background:#000"></video>
+  <div style="flex:1;min-width:200px"><b>${esc(v.handle?'@'+v.handle:(v.uploader||v.file))}</b>${v.handle&&v.uploader?` <span class="muted">${esc(v.uploader)}</span>`:''} <span class="muted" style="font-size:12px">${v.duration?Math.round(v.duration)+'s · ':''}${v.width&&v.height?v.width+'×'+v.height+' · ':''}${v.size_mb} MB</span>
+  <div class="muted" style="font-size:12px;margin:4px 0">${esc((v.caption||v.title||'').slice(0,220))}</div>
+  ${v.permission?`<div style="font-size:12px;margin:4px 0;color:#9bffb0">✅ Permission: ${esc(v.permission.how)} on ${esc(v.permission.date)}${v.permission.proof?' · '+esc(v.permission.proof):''}${(v.jobs||[]).length?` · sent to Review ×${v.jobs.length}`:''}</div>`:`<div style="font-size:12px;margin:4px 0;color:#ffcc9e">No permission recorded — ask @${esc(v.handle||'the creator')} before re-posting.</div>`}
+  <div class="acts" style="display:flex;gap:8px;flex-wrap:wrap">${v.permission?`<button onclick="openSend('${esc(v.file)}')">➕ Send to Review</button>`:`<button onclick="openPerm('${esc(v.file)}')">✅ Record permission</button>`}<a href="/downloads/file/${encodeURIComponent(v.file)}" download><button class="ghost">💾 Save to computer</button></a>${v.post?`<a href="${esc(v.post)}" target="_blank" rel="noopener"><button class="ghost">↗ Open post</button></a>`:''}<button class="ghost" onclick="delDownload('${esc(v.file)}')">✕ Delete</button></div>
+  <div id="pf-${esc(v.file)}" hidden class="gemform" style="margin-top:8px"><div class="row"><label>How did they agree?<select class="pHow"><option>Instagram DM</option><option>Instagram comment</option><option>Email</option><option>Other</option></select></label><label>Date<input type="date" class="pDate" value="${new Date().toISOString().slice(0,10)}"></label><label style="flex:1">Proof (link or where the screenshot is)<input class="pProof" style="width:100%;box-sizing:border-box" placeholder="e.g. DM screenshot in Photos, 14 Oct"></label></div>
+   <label class="chk muted" style="font-size:12px"><input type="checkbox" class="pOk"> @${esc(v.handle||'the creator')} agreed that I can re-post this video on YouTube</label> <button onclick="savePerm('${esc(v.file)}')">Save permission</button></div>
+  <div id="sf-${esc(v.file)}" hidden style="margin-top:8px"><label>YouTube title<input class="sTitle" maxlength="100" style="width:100%;box-sizing:border-box" value="${esc((v.caption||'').replace(/#\S+/g,'').replace(/\s+/g,' ').trim().slice(0,90))}"></label>
+   <label>Description <span class="muted" style="font-size:12px">(credit to @${esc(v.handle||'creator')} + original link are added automatically)</span><textarea class="sDesc" rows="2" style="width:100%;box-sizing:border-box"></textarea></label>
+   <label>Hashtags<input class="sTags" style="width:100%;box-sizing:border-box" value="${esc(((v.caption||'').match(/#\w+/g)||[]).concat(['Shorts']).join(' '))}"></label> <button onclick="sendReview('${esc(v.file)}')">Send to Review</button></div>
+  </div></div>`).join(''):'Nothing yet.'}catch(e){$('dlList').textContent=e.message}}
+function openPerm(f){const e=document.getElementById('pf-'+f);e.hidden=!e.hidden}
+function openSend(f){const e=document.getElementById('sf-'+f);e.hidden=!e.hidden}
+async function savePerm(f){const e=document.getElementById('pf-'+f),m=$('dlMsg');if(!e.querySelector('.pOk').checked){m.textContent='Tick the box to confirm the creator agreed.';return}
+ try{await api('/downloads/'+encodeURIComponent(f)+'/permission','POST',{how:e.querySelector('.pHow').value,date:e.querySelector('.pDate').value,proof:e.querySelector('.pProof').value.trim()});m.textContent='✓ Permission recorded.';loadDownloads()}catch(x){m.textContent=x.message}}
+async function sendReview(f){const e=document.getElementById('sf-'+f),m=$('dlMsg');
+ try{const d=await api('/downloads/'+encodeURIComponent(f)+'/to-review','POST',{title:e.querySelector('.sTitle').value.trim(),description:e.querySelector('.sDesc').value.trim(),hashtags:e.querySelector('.sTags').value.split(/[\s,]+/).filter(Boolean)});m.textContent='✓ Sent to Review — approve it there.';loadDownloads()}catch(x){m.textContent=x.message}}
+async function delDownload(f){try{await api('/downloads/'+encodeURIComponent(f),'DELETE');loadDownloads()}catch(e){$('dlMsg').textContent=e.message}}
+function toggleRevise(){const b=$('reviseBox');b.hidden=!b.hidden;if(!b.hidden)$('reviseText').focus()}
+async function reviseDraft(){const t=$('reviseText').value.trim(),m=$('msg');if(t.length<3){m.textContent='Type what to change first.';return}
+ document.querySelectorAll('#scriptBox button,#goBtn').forEach(x=>x.disabled=true);m.textContent='Rewriting the script with your instructions…';
+ try{const j=await api('/revise/'+DRAFT.id,'POST',{instructions:t});DRAFT.script=j.script;showDraft();m.textContent='Script revised — read it below, then approve to render.'}
+ catch(e){m.textContent=e.message;document.querySelectorAll('#scriptBox button,#goBtn').forEach(x=>x.disabled=false)}}
+async function discardDraft(quiet){const id=DRAFT&&DRAFT.id;DRAFT=null;$('scriptBox').hidden=true;if(!quiet)$('msg').textContent='Script discarded.';
+ if(id)try{await api('/reject/'+id,'POST')}catch{}}
+
+let apLoaded=false;
+async function loadAuto(poll){const s=await api('/autopilot'),c=s.config;
+ if(!poll||!apLoaded){apLoaded=true;$('apOn').checked=c.enabled;$('apInt').value=c.interval_hours;$('apN').value=c.per_run;$('apDur').value=c.duration;$('apMax').value=c.max_pending;$('apAI').checked=c.ai_video;$('apProv').value=c.ai_provider;$('apMode').value=c.ai_mode;
+  $('apSeries').innerHTML=SERIES.map(x=>`<label class="chk"><input type="checkbox" class="apS" value="${x.id}" ${c.series.includes(x.id)?'checked':''}> ${esc(x.label.split(' — ')[0])}</label>`).join('')}
+ const when=t=>t?new Date(t).toLocaleString():'—';
+ $('apState').innerHTML=`${s.current?`<b>Working on:</b> ${esc(s.current)}`:'Idle'} · queued tasks: ${s.queued} · last run: ${when(s.last_run)} · next run: ${c.enabled?when(s.next_run)||'soon':'(autopilot off)'}`;
+ $('apLog').textContent=s.log.join('\n')||'No activity yet.'}
+async function saveAuto(){const series=[...document.querySelectorAll('.apS:checked')].map(x=>x.value);try{await api('/autopilot','POST',{enabled:$('apOn').checked,interval_hours:+$('apInt').value,per_run:+$('apN').value,duration:+$('apDur').value,max_pending:+$('apMax').value,ai_video:$('apAI').checked,ai_provider:$('apProv').value,ai_mode:$('apMode').value,series});$('apMsg').textContent='Saved.';loadAuto()}catch(e){$('apMsg').textContent=e.message}}
+async function runNow(){try{await saveAuto();await api('/autopilot/run','POST');$('apMsg').textContent='Batch queued.';loadAuto(true)}catch(e){$('apMsg').textContent=e.message}}
+
+async function loadJobs(){const f=$('jobFilter').value;let jobs=await api('/jobs');if(f==='failed')jobs=jobs.filter(j=>/failed/.test(j.status));else if(f)jobs=jobs.filter(j=>j.status===f);
+ const label=Object.fromEntries(SERIES.map(s=>[s.id,s.label.split(' — ')[0]]));
+ $('jobs').innerHTML=jobs.map(j=>`<div class="card job"><div>${j.video_path?`<video controls playsinline preload="none" src="/video/${j.id}"></video>`:''}</div><div>
+  <span class="pill ${j.status}">${j.status==='published'&&j.publish_at&&new Date(j.publish_at)>new Date()?'scheduled':j.status}</span>${j.publish_at?`<span class="pill">📅 ${new Date(j.publish_at).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}</span>`:''}${j.youtube_id?`<a class="pill" href="https://youtube.com/shorts/${esc(j.youtube_id)}" target="_blank" rel="noopener">▶ YouTube</a>`:''}<span class="pill">${esc(label[j.series]||j.series||'')}</span>${j.source!=='manual'?`<span class="pill">${esc(j.source)}</span>`:''}
+  <h3 style="margin:6px 0">${esc(j.title||j.id)}</h3><div class="muted">${esc(j.description||'')}</div>${flagsFor(j)}<div class="muted" style="font-size:12px">${j.id} · ${new Date(j.created_at).toLocaleString()}${j.script_json&&j.script_json.script_source?' · script: '+esc(j.script_json.script_source):''}</div>
+  <div class="row" style="margin-top:8px">${j.status==='pending_review'?`<button onclick="act('/approve/${j.id}')">Approve</button><button class="bad" onclick="act('/reject/${j.id}')">Reject</button>`:''}${j.status==='approved'||j.status==='publish_failed'?`<button onclick="act('/publish/${j.id}/youtube')">Publish to YouTube now</button><input type="datetime-local" id="at-${j.id}"><button class="ghost" onclick="schedule('${j.id}')">📅 Schedule</button><button class="alt" onclick="act('/publish/${j.id}/instagram')">Publish to Instagram</button>`:''}${['script_ready','render_failed','failed'].includes(j.status)?`<button onclick="act('/render/${j.id}')">Render / retry</button>`:''}</div>
+  ${j.error?`<pre style="margin-top:8px;color:var(--bad)">${esc(j.error)}</pre>`:''}</div></div>`).join('')||'<p class="muted">Nothing here.</p>'}
+async function schedule(id){const v=$('at-'+id).value;if(!v){alert('Pick a date and time first');return}
+ try{const d=await api('/publish/'+id+'/youtube','POST',{confirm:true,publish_at:new Date(v).toISOString()});alert('Uploaded — goes public '+new Date(d.publish_at).toLocaleString())}catch(e){alert(e.message)}loadJobs()}
+async function planDay(){const day=$('plDay').value,m=$('plMsg'),b=$('plBtn');if(!day){m.textContent='Pick a day.';return}
+ const slots=['plT1','plT2','plT3'].map(t=>new Date(`${day}T${$(t).value}`).toISOString());b.disabled=true;m.textContent='Uploading to YouTube… (a browser window may open the first time to connect your channel)';
+ try{const r=await api('/plan/day','POST',{slots});m.innerHTML=r.results.map(x=>`${new Date(x.slot).toLocaleTimeString([], {timeStyle:'short'})} · ${x.kind==='own'?'your own':'re-post'}: ${x.error?'⚠ '+esc(x.error):'✓ scheduled'}`).join('<br>')}catch(e){m.textContent=e.message}b.disabled=false;loadJobs()}
+async function act(url){try{const d=await api(url,'POST',{confirm:true});if(d.url||d.instagram_media_id)alert(JSON.stringify(d,null,2))}catch(e){alert(e.message)}loadJobs()}
+
+async function refreshStats(){const b=$('stBtn');b.disabled=true;$('stMsg').textContent='Fetching…';try{const r=await api('/analytics/refresh','POST');$('stMsg').textContent=`YouTube ${r.youtube} · Instagram ${r.instagram}${r.errors.length?' — '+r.errors.join(' | '):''}`}catch(e){$('stMsg').textContent=e.message}b.disabled=false;loadStats()}
+async function loadStats(){const s=await api('/analytics'),st=s.status,n=k=>st[k]||0;
+ const card=(v,l)=>`<div class="card"><div class="stat">${v}</div><div class="muted">${l}</div></div>`;
+ $('stCards').innerHTML=card(n('pending_review'),'waiting for review')+card(n('approved'),'approved')+card(n('published'),'published')+card(s.totals.v.toLocaleString(),'total views')+card(s.totals.l.toLocaleString(),'likes')+card((n('failed')+n('render_failed')+n('publish_failed')),'failed');
+ const lab=Object.fromEntries(SERIES.map(x=>[x.id,x.label.split(' — ')[0]]));
+ $('stSeries').innerHTML='<tr><th>Series</th><th>Videos</th><th>By autopilot</th><th>Published</th><th>Failed</th><th>Views</th><th>Avg views</th><th>Likes</th></tr>'+s.per_series.map(r=>`<tr><td>${esc(lab[r.series]||r.series)}</td><td>${r.jobs}</td><td>${r.auto}</td><td>${r.published}</td><td>${r.failed}</td><td>${r.views}</td><td>${r.avg_views}</td><td>${r.likes}</td></tr>`).join('');
+ const mx=Math.max(1,...s.daily.map(d=>d.made));$('stDaily').innerHTML=s.daily.map(d=>`<div title="${d.day}: ${d.made}" style="height:${d.made/mx*100}%"></div>`).join('')||'<span class="muted">No videos yet.</span>';
+ $('stTop').innerHTML=s.top.length?'<tr><th>Title</th><th>Platform</th><th>Views</th><th>Likes</th><th>Comments</th></tr>'+s.top.map(t=>`<tr><td>${esc(t.title)}</td><td>${t.platform}</td><td>${t.views}</td><td>${t.likes}</td><td>${t.comments}</td></tr>`).join(''):'<tr><td class="muted">Publish videos and press “Refresh platform stats” to see performance here.</td></tr>';
+ if(s.metrics_updated)$('stMsg').textContent='Stats last updated '+new Date(s.metrics_updated).toLocaleString()}
+async function loadNiche(){const s=await api('/niche');if(s.youtube_data==='none')$('nMsg').textContent='No YouTube access configured — add GOOGLE_APPLICATION_CREDENTIALS to .env.';
+ if(s.research)renderNicheRes(s.research);if(s.proposals)renderProps(s.proposals)}
+function renderNicheRes(r){$('nRes').style.display='block';$('nPropCard').style.display='block';
+ $('nTable').innerHTML='<tr><th>Topic</th><th>Opportunity</th><th>Median views</th><th>Small channels winning</th><th>Top video</th></tr>'+r.keywords.map(k=>`<tr><td><b>${esc(k.keyword)}</b></td><td>${k.opportunity}</td><td>${k.median_views.toLocaleString()}</td><td>${k.small_channel_wins}/${k.n}</td><td><a href="${esc(k.top[0].url)}" target="_blank" rel="noopener">${esc(k.top[0].title.slice(0,55))}</a> <span class="muted">${k.top[0].views.toLocaleString()}</span></td></tr>`).join('');
+ $('nMsg').textContent=`Region ${r.region}, last ${r.days} days · ${new Date(r.generated_at).toLocaleString()} · ~${r.quota_units_used} API quota units`}
+async function nicheResearch(){const b=$('nBtn');b.disabled=true;$('nMsg').textContent='Searching YouTube…';try{const kw=$('nKw').value.split(',').map(x=>x.trim()).filter(Boolean);renderNicheRes(await api('/niche/research','POST',{keywords:kw.length?kw:null,region:$('nReg').value,days:+$('nDays').value}));renderProps([])}catch(e){$('nMsg').textContent=e.message}b.disabled=false}
+function renderProps(p){$('nProps').innerHTML=p.map((x,i)=>`<div class="card"><h3 style="margin:0 0 6px">${esc(x.series_label)}</h3><div class="muted">${esc(x.why||'')}</div><p style="font-size:13px">${(x.first_topics||[]).slice(0,4).map(t=>'• '+esc(t)).join('<br>')}</p>${x.adopted_as?`<button disabled>✓ Added as a series</button>`:`<button id="adopt${i}" onclick="adopt(${i})">Use this niche</button>`}<div class="muted" id="adoptMsg${i}" style="margin-top:6px">${x.adopted_as?'Find it in Create and Autopilot.':''}</div></div>`).join('')}
+async function nicheProposals(){const b=$('nPBtn');b.disabled=true;$('nMsg').textContent='The AI is analysing the data…';try{renderProps(await api('/niche/propose','POST',{profile:$('nProfile').value}));$('nMsg').textContent='Pick a niche to add it as a series.'}catch(e){$('nMsg').textContent=e.message}b.disabled=false}
+async function adopt(i){const b=$('adopt'+i),m=$('adoptMsg'+i);b.disabled=true;b.textContent='Adding…';
+ try{const r=await api('/niche/adopt','POST',{index:i});SERIES=await api('/series');const o=SERIES.map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join('');$('series').innerHTML=o;
+  b.textContent='✓ Added as a series';m.innerHTML=`${r.ideas_added} starter ideas added. Find it in Create and Autopilot.`;apLoaded=false}
+ catch(e){b.disabled=false;b.textContent='Use this niche';m.textContent='Failed: '+e.message}}
+init();
+</script></body></html>

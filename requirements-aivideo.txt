@@ -1,0 +1,10 @@
+# Optional: local AI video clips (LTX-Video). Install PyTorch for your CUDA version FIRST, e.g.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu126
+diffusers
+transformers
+accelerate
+sentencepiece
+protobuf
+huggingface_hub
+imageio
+imageio-ffmpeg
