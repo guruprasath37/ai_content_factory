@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, json, math, os, queue, re, shutil, sqlite3, subprocess, sys, threading, time, uuid
+import asyncio, json, math, os, queue, random, re, shutil, sqlite3, subprocess, sys, threading, time, uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -879,6 +879,24 @@ def get_job(job_id:str):
     if not r: raise HTTPException(404,"Job not found")
     return rowdict(r)
 
+THUMBS = CONTENT / "thumbs"
+
+def _thumb(video: Path, key: str) -> Path:
+    """A preview frame (cached) grabbed from the video itself with ffmpeg."""
+    out = THUMBS / f"{key}.jpg"
+    if out.exists() and out.stat().st_mtime >= video.stat().st_mtime: return out
+    THUMBS.mkdir(exist_ok=True)
+    for ss in ("1", "0"):   # a frame 1 s in (past fade-ins); fall back to the first frame for very short clips
+        r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", ss, "-i", str(video), "-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", str(out)], capture_output=True, text=True)
+        if r.returncode == 0 and out.exists() and out.stat().st_size > 0: return out
+    raise HTTPException(500, "Could not grab a frame from this video")
+
+@app.get("/thumb/{job_id}")
+def job_thumb(job_id: str):
+    con = db(); r = con.execute("SELECT video_path FROM jobs WHERE id=?", (job_id,)).fetchone(); con.close()
+    if not r or not r["video_path"] or not Path(r["video_path"]).exists(): raise HTTPException(404, "No video yet")
+    return FileResponse(_thumb(Path(r["video_path"]), job_id), media_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
+
 @app.get("/video/{job_id}")
 def video(job_id:str):
     con=db(); r=con.execute("SELECT video_path FROM jobs WHERE id=?",(job_id,)).fetchone(); con.close()
@@ -1350,6 +1368,12 @@ def list_downloads():
     vids = [p for p in DOWNLOADS.iterdir() if p.suffix in (".mp4", ".webm", ".mkv", ".mov") and DL_NAME.match(p.name)]
     return [_dl_meta(p) for p in sorted(vids, key=lambda p: p.stat().st_mtime, reverse=True)]
 
+@app.get("/downloads/thumb/{name}")
+def download_thumb(name: str):
+    p = DOWNLOADS / name
+    if not DL_NAME.match(name) or p.suffix == ".json" or not p.exists(): raise HTTPException(404, "File not found")
+    return FileResponse(_thumb(p, "dl_" + p.stem), media_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
+
 @app.get("/downloads/file/{name}")
 def download_file(name: str):
     p = DOWNLOADS / name
@@ -1652,6 +1676,7 @@ def channels_sort():
 class ScheduleAll(BaseModel):
     days: int = Field(default=3, ge=1, le=14)
     max_uploads: int | None = Field(default=None, ge=1, le=50)
+    shuffle: bool = True   # post in random order instead of oldest-first
 
 @app.post("/channels/schedule-all")
 def channels_schedule_all(req: ScheduleAll):
@@ -1665,6 +1690,7 @@ def channels_schedule_all(req: ScheduleAll):
         ready = [r["id"] for r in rows if r["channel_id"] == c["id"]]
         entry = {"channel": c["name"], "ready": len(ready), "scheduled": [], "errors": [], "note": ""}
         report.append(entry)
+        if req.shuffle: random.shuffle(ready)
         if not ready: entry["note"] = "no ready videos"; continue
         if not (ROOT / c["token_file"]).exists(): entry["note"] = "not connected to YouTube yet (press Connect)"; continue
         slots = []
@@ -1793,6 +1819,7 @@ def plan_day(plan: DayPlan):
     con = db(); rows = con.execute("SELECT id,source,channel_id FROM jobs WHERE status='approved' AND youtube_id IS NULL ORDER BY created_at").fetchall(); con.close()
     if plan.channel is not None: rows = [r for r in rows if (r["channel_id"] or "") == plan.channel]
     lic = [r["id"] for r in rows if r["source"] == "licensed"]; own = [r["id"] for r in rows if r["source"] != "licensed"]
+    random.shuffle(lic); random.shuffle(own)   # random order rather than oldest-first, so the channel does not post in download order
     want = ["licensed", "own", "licensed", "own", "licensed", "own"][:len(plan.slots)]
     picks, results = [], []
     for kind in want:
