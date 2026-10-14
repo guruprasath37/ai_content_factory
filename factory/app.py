@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, json, math, os, queue, re, shutil, sqlite3, subprocess, threading, time, uuid
+import asyncio, json, math, os, queue, re, shutil, sqlite3, subprocess, sys, threading, time, uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1236,6 +1236,49 @@ DOWNLOADS = CONTENT / "downloads"
 IG_URL = re.compile(r"^https?://(?:www\.)?instagram\.com/(?:[\w.]+/)?(?:p|reels?|tv)/([\w-]{5,})", re.I)
 DL_NAME = re.compile(r"^ig_[\w-]+\.(?:mp4|webm|mkv|mov|json)$")
 
+def _ytdlp_bin() -> str | None:
+    venv = Path(sys.executable).parent / "yt-dlp"
+    return os.getenv("YTDLP_BIN") or shutil.which("yt-dlp") or (str(venv) if venv.exists() else None) or ("/opt/homebrew/bin/yt-dlp" if Path("/opt/homebrew/bin/yt-dlp").exists() else None)
+
+IG_PROFILE = re.compile(r"^https?://(?:www\.)?instagram\.com/([\w.]{1,30})/?(?:reels/?)?(?:[?#].*)?$", re.I)
+IG_RESERVED = {"p", "reel", "reels", "tv", "explore", "stories", "accounts", "direct", "tags", "web"}
+
+class ProfileRequest(BaseModel):
+    url: str = Field(min_length=10, max_length=300)
+    limit: int = Field(default=20, ge=1, le=60)
+
+@app.post("/downloads/profile")
+def list_profile(req: ProfileRequest):
+    """List the newest video posts of a public Instagram profile (links only, nothing is downloaded). Feed the ones you pick into /downloads/batch."""
+    m = IG_PROFILE.match(req.url.strip())
+    if not m or m.group(1).lower() in IG_RESERVED: raise HTTPException(422, "Paste a profile link like https://www.instagram.com/username/")
+    ytdlp = _ytdlp_bin()
+    if not ytdlp: raise HTTPException(500, "yt-dlp is not installed (pip install yt-dlp, or brew install yt-dlp)")
+    handle = m.group(1)
+    cmd = [ytdlp, "--no-warnings", "--flat-playlist", "--playlist-end", str(req.limit * 2), "-J", "--sleep-requests", "1"]   # fetch extra: photo-only posts are dropped below
+    if os.getenv("INSTAGRAM_COOKIES_BROWSER"): cmd += ["--cookies-from-browser", os.getenv("INSTAGRAM_COOKIES_BROWSER")]
+    try: r = subprocess.run(cmd + ["--", f"https://www.instagram.com/{handle}/"], capture_output=True, text=True, timeout=int(os.getenv("YTDLP_TIMEOUT", "180")))
+    except subprocess.TimeoutExpired: raise HTTPException(504, "Instagram took too long to respond; try again with a smaller limit")
+    try: info = json.loads(r.stdout)
+    except ValueError: info = None
+    if not isinstance(info, dict):   # yt-dlp prints "null" (or nothing) when Instagram refuses the listing
+        err = ((r.stderr or "").strip().splitlines() or ["Instagram returned no post list (it usually requires a login for this)"])[-1]
+        low = err.lower()
+        hint = ("Instagram wants a login to list this profile's posts (common even for public accounts). Set INSTAGRAM_COOKIES_BROWSER=chrome in .env "
+                "(logged in to Instagram in that browser) and restart.") if any(k in low for k in ("login", "cookies", "rate", "401", "403", "empty media", "not available", "private", "no post list", "requires a login")) else "Could not list this profile. Try `pip install -U yt-dlp` (Instagram changes often)."
+        raise HTTPException(502, f"{hint} Details: {err[:300]}")
+    items, seen = [], set()
+    for e in info.get("entries") or []:
+        link = e.get("webpage_url") or e.get("url") or ""
+        mm = IG_URL.match(link)
+        if not mm or mm.group(1) in seen: continue
+        if e.get("duration") is None and e.get("ie_key") not in (None, "Instagram"): continue
+        seen.add(mm.group(1))
+        items.append({"url": f"https://www.instagram.com/p/{mm.group(1)}/", "title": (e.get("title") or e.get("description") or "")[:100], "duration": e.get("duration"), "thumbnail": e.get("thumbnail")})
+        if len(items) >= req.limit: break
+    if not items: raise HTTPException(404, "No video posts found (the account may be private, empty, or Instagram hid the list; see INSTAGRAM_COOKIES_BROWSER in the README)")
+    return {"handle": handle, "count": len(items), "items": items}
+
 class DownloadRequest(BaseModel):
     url: str = Field(min_length=10, max_length=500)
 
@@ -1263,7 +1306,7 @@ def _fetch_instagram(raw_url: str) -> list[dict]:
     """Download one public Instagram post/reel into downloads/ and return its metadata. Raises HTTPException on failure."""
     m = IG_URL.match(raw_url.strip())
     if not m: raise HTTPException(422, "Paste a link to an Instagram post or reel, like https://www.instagram.com/reel/ABC123/")
-    ytdlp = os.getenv("YTDLP_BIN") or shutil.which("yt-dlp") or ("/opt/homebrew/bin/yt-dlp" if Path("/opt/homebrew/bin/yt-dlp").exists() else None)
+    ytdlp = _ytdlp_bin()
     if not ytdlp: raise HTTPException(500, "yt-dlp is not installed. Run: brew install yt-dlp")
     DOWNLOADS.mkdir(parents=True, exist_ok=True)
     url = f"https://www.instagram.com/p/{m.group(1)}/"   # canonical form, drops tracking parameters

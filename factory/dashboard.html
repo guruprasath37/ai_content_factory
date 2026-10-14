@@ -212,6 +212,10 @@ pre{white-space:pre-wrap;margin:0;font:12px/1.55 ui-monospace,SFMono-Regular,Men
 <p class="muted" style="margin-top:-4px">Paste the link of a post or reel from a <b>public</b> account. Use downloads for reference, research or content you own or have permission to use — re-posting someone else's video without permission can break Instagram's terms and copyright.</p>
 <div class="row"><label style="flex:1;min-width:260px">Post or reel link<input id="dlUrl" style="width:100%" placeholder="https://www.instagram.com/reel/…"></label><button id="dlBtn" onclick="downloadIg()">⬇ Download</button></div>
 <p class="muted" id="dlMsg" style="margin-bottom:0"></p></div>
+<div class="card"><div class="ch"><h2>Profile · list a creator's posts</h2></div>
+<p class="muted" style="margin-top:-4px">Paste a public profile link to list its newest video posts, tick the ones you want, and send them to the batch below. Listing downloads nothing. Only do this for creators who agreed to let you re-post their videos.</p>
+<div class="row"><label style="flex:1;min-width:260px">Profile link<input id="pfUrl" style="width:100%" placeholder="https://www.instagram.com/username/"></label><label>Newest<input id="pfN" type="number" value="20" min="1" max="60" style="width:80px"></label><button id="pfBtn" onclick="listProfile()">List posts</button></div>
+<p class="muted" id="pfMsg" style="margin:8px 0 0"></p><div id="pfList" style="margin-top:8px"></div></div>
 <div class="card"><div class="ch"><h2>Batch · many links → ready to post</h2></div>
 <p class="muted" style="margin-top:-4px">One public post or reel link per line. Each is downloaded and, once you confirm the creators agreed to the re-post, marked <b>ready</b> so the daily plan publishes it to YouTube on schedule (with credit). Without the confirmation the videos are only downloaded.</p>
 <textarea id="bUrls" rows="5" style="width:100%" placeholder="https://www.instagram.com/reel/…&#10;https://www.instagram.com/p/…"></textarea>
@@ -495,5 +499,11 @@ async function saveChannel(){const body={name:$('chName').value.trim(),tags:$('c
 async function delChannel(id){if(!confirm('Delete this channel? Its videos stay, just without a channel.'))return;try{await api('/channels/'+id,'DELETE')}catch(e){alert(e.message)}loadChannels()}
 async function presetChannels(){try{await api('/channels/preset','POST')}catch(e){alert(e.message)}loadChannels()}
 async function connectChannel(id,b){b.disabled=true;try{await api('/channels/'+id+'/connect','POST');b.textContent='Finish sign-in in the browser window…';let n=0;const poll=async()=>{await loadChannels();const c=CHS.find(x=>x.id===id);if(c&&c.connected)return;if(++n<60)CHP=setTimeout(poll,3000)};CHP=setTimeout(poll,3000)}catch(e){alert(e.message);b.disabled=false}}
+async function listProfile(){const b=$('pfBtn'),m=$('pfMsg');b.disabled=true;m.textContent='Listing… (this can take up to a minute)';$('pfList').innerHTML='';
+ try{const r=await api('/downloads/profile','POST',{url:$('pfUrl').value.trim(),limit:+$('pfN').value||20});m.textContent=`@${r.handle}: ${r.count} video post${r.count===1?'':'s'} found.`;
+  $('pfList').innerHTML=`<div class="acts" style="margin:0 0 8px"><button class="sm ghost" onclick="document.querySelectorAll('.pfC').forEach(x=>x.checked=true)">Select all</button><button class="sm ghost" onclick="document.querySelectorAll('.pfC').forEach(x=>x.checked=false)">None</button><button class="sm" onclick="pfToBatch()">Add selected to batch ↓</button></div>`
+   +r.items.map(i=>`<label class="hl chk" style="padding:5px 0"><input type="checkbox" class="pfC" value="${esc(i.url)}" checked><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.title||i.url)}</span><span class="muted" style="font-size:12px">${i.duration?Math.round(i.duration)+'s':''}</span></label>`).join('')}
+ catch(e){m.textContent=e.message}b.disabled=false}
+function pfToBatch(){const u=[...document.querySelectorAll('.pfC:checked')].map(x=>x.value);if(!u.length)return;$('bUrls').value=($('bUrls').value.trim()?$('bUrls').value.trim()+'\n':'')+u.join('\n');$('pfMsg').textContent=`${u.length} link(s) added to the batch below. Confirm permission there, then fetch.`;$('bUrls').scrollIntoView({behavior:'smooth',block:'center'})}
 init();
 </script></body></html>
