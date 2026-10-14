@@ -100,6 +100,7 @@ pre{white-space:pre-wrap;margin:0;font:12px/1.55 ui-monospace,SFMono-Regular,Men
 <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
 <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
 <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></symbol>
+<symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
 <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></symbol>
 </defs></svg>
 <div class="shell">
@@ -178,6 +179,18 @@ pre{white-space:pre-wrap;margin:0;font:12px/1.55 ui-monospace,SFMono-Regular,Men
 <div class="seg" id="jobSeg"></div> <span class="muted" style="font-size:12px;margin-left:8px">Stock footage courtesy of <a href="https://pixabay.com" target="_blank" rel="noopener">Pixabay</a></span>
 <div id="jobs"></div></section>
 
+<section class="tab" id="t-channels">
+ <div class="hero"><div><h2>Your channels</h2><p>Each channel covers some topics. New videos join the channel that matches their topic, use that channel's login and hashtags, and are scheduled on its slots.</p></div><span class="sp"></span><button class="alt" onclick="presetChannels()">✨ Add the 5 suggested channels</button><button onclick="editChannel()">＋ New channel</button></div>
+ <div class="muted" id="chWarn" style="margin-bottom:12px"></div>
+ <div class="card" id="chForm" hidden><div class="ch"><h2 id="chFormT">New channel</h2></div>
+  <div class="row"><label style="flex:1;min-width:200px">Channel name<input id="chName" style="width:100%" maxlength="60"></label>
+  <label style="flex:1;min-width:200px">Signature hashtags (comma separated, no #)<input id="chTags" style="width:100%" placeholder="e.g. history, historyfacts"></label>
+  <label>Daily slots (24 h)<input id="chTimes" value="09:00,14:00,19:00" style="width:200px"></label><label class="chk"><span class="sw"><input type="checkbox" id="chAuto"><i></i></span> Auto-schedule</label></div>
+  <p class="muted" style="margin:14px 0 6px;font-size:12.5px;font-weight:550">Topics this channel covers</p><div class="row" id="chTopics" style="gap:6px 16px"></div>
+  <div class="acts"><button onclick="saveChannel()">Save</button><button class="ghost" onclick="$('chForm').hidden=true">Cancel</button><span class="muted" id="chMsg"></span></div></div>
+ <div id="chList"></div>
+</section>
+
 <section class="tab" id="t-stats"><div class="row" style="margin-bottom:16px"><button onclick="refreshStats()" id="stBtn" class="alt">↻ Refresh platform stats</button><span class="muted" id="stMsg"></span></div>
 <div class="g g4" id="stCards"></div>
 <div class="g g2"><div class="card"><div class="ch"><h2>Videos made · last 14 days</h2></div><div id="stDaily"></div></div>
@@ -215,7 +228,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function api(url,method='GET',body){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});let d;try{d=await r.json()}catch{d={}}if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:JSON.stringify(d.detail||d));return d}
 let SERIES=[],KL=null,AF=null,HEALTH=null;
-const TABS=[['dash','Dashboard','grid','Overview','Production, review queue and performance at a glance'],['ideas','Daily ideas','bolt','Produce','Fresh scene scripts, topics and Instagram hashtags every day'],['create','Create','plus','Produce','Write a script, approve it, then render the video'],['auto','Autopilot','bot','Produce','Scheduled batches that keep your review queue full'],['download','Download','down','Produce','Save public Instagram videos for reference, or re-post with permission'],['jobs','Review','check','Manage','Approve, schedule and publish finished videos'],['stats','Analytics','chart','Manage','Output and per-video performance'],['niche','Niche','compass','Manage','Find topics where small channels are winning']];
+const TABS=[['dash','Dashboard','grid','Overview','Production, review queue and performance at a glance'],['ideas','Daily ideas','bolt','Produce','Fresh scene scripts, topics and Instagram hashtags every day'],['create','Create','plus','Produce','Write a script, approve it, then render the video'],['auto','Autopilot','bot','Produce','Scheduled batches that keep your review queue full'],['download','Download','down','Produce','Save public Instagram videos for reference, or re-post with permission'],['jobs','Review','check','Manage','Approve, schedule and publish finished videos'],['channels','Channels','tv','Manage','One YouTube channel per niche: topics, hashtags, login and schedule'],['stats','Analytics','chart','Manage','Output and per-video performance'],['niche','Niche','compass','Manage','Find topics where small channels are winning']];
 const ic=n=>`<svg class="i"><use href="#i-${n}"/></svg>`;
 let _g='';$('nav').innerHTML=TABS.map(([k,l,i,g])=>{const h=g!==_g?`<div class="grp">${g}</div>`:'';_g=g;return h+`<button class="nav" id="b-${k}" onclick="show('${k}')">${ic(i)}${l}${k==='jobs'?'<span class="badge" id="revBadge" hidden>0</span>':''}${k==='auto'?'<span class="dot" id="navDot"></span>':''}</button>`}).join('');
 function flagsFor(j){const p=j.provenance,sc=j.script_json||{},f=[],fl=(c,t,tip)=>`<span class="flag ${c}" title="${esc(tip||'')}">${t}</span>`;
@@ -243,7 +256,7 @@ function seriesHint(){const s=SERIES.find(x=>x.id===$('series').value);if(s&&s.a
 function pickEngine(){const kl=$('aiProvider').value!=='ltx';if($('aiProvider').value==='gemini'){$('aiVideo').checked=true;$('duration').value=15}document.querySelector(`input[name=aiMode][value=${kl?'t2v':'i2v'}]`).checked=true;syncMode()}   // sensible default per engine; the user can still change it
 try{const t=new Date(Date.now()+864e5);document.addEventListener('DOMContentLoaded',()=>{const d=$('plDay');if(d&&!d.value)d.value=t.toISOString().slice(0,10)})}catch{}
 function show(k){if(!TABS.some(t=>t[0]===k))k='dash';TABS.forEach(([t,l,,,s])=>{$('t-'+t).classList.toggle('on',t===k);$('b-'+t).classList.toggle('on',t===k);if(t===k){$('pgT').textContent=l;$('pgS').textContent=s}});location.hash=k;
- ({dash:loadDash,ideas:loadIdeas,auto:loadAuto,jobs:()=>{loadJobs();loadSched()},stats:loadStats,niche:loadNiche,download:loadDownloads})[k]?.()}
+ ({channels:loadChannels,dash:loadDash,ideas:loadIdeas,auto:loadAuto,jobs:()=>{loadJobs();loadSched()},stats:loadStats,niche:loadNiche,download:loadDownloads})[k]?.()}
 const reload=()=>{const on=TABS.find(t=>$('t-'+t[0]).classList.contains('on'));on&&on[0]==='dash'?loadDash():loadJobs();refreshBadge()};
 setInterval(async()=>{try{if($('t-auto').classList.contains('on'))return loadAuto(true);const s=await api('/autopilot');paintAp(s);if($('t-dash').classList.contains('on'))dashAuto(s)}catch{}},4000);
 
@@ -329,16 +342,16 @@ async function runNow(){try{await saveAuto();await api('/autopilot/run','POST');
 
 const JSEG=[['pending_review','Needs review'],['approved','Approved'],['published','Published'],['failed','Failed'],['rejected','Rejected'],['','All']];
 const jobGroup=j=>/failed/.test(j.status)?'failed':j.status;
-async function loadJobs(){const f=$('jobFilter').value,all=await api('/jobs');
+async function loadJobs(){const f=$('jobFilter').value,[all,chr]=await Promise.all([api('/jobs'),api('/channels').catch(()=>({channels:[]}))]);CHS=chr.channels;const chName=Object.fromEntries(CHS.map(c=>[c.id,c.name]));
  const cnt=k=>k===''?all.length:all.filter(j=>jobGroup(j)===k).length;
  $('jobSeg').innerHTML=JSEG.map(([k,l])=>`<button class="${k===f?'on':''}" onclick="$('jobFilter').value='${k}';loadJobs()">${l}<span class="n">${cnt(k)}</span></button>`).join('');
  setBadge(cnt('pending_review'));
  const jobs=f?all.filter(j=>jobGroup(j)===f):all;
  const label=Object.fromEntries(SERIES.map(s=>[s.id,s.label.split(' — ')[0]]));
  $('jobs').innerHTML=jobs.map(j=>`<div class="card job"><div>${j.video_path?`<video controls playsinline preload="none" src="/video/${j.id}"></video>`:''}</div><div>
-  <span class="pill ${j.status}">${j.status==='published'&&j.publish_at&&new Date(j.publish_at)>new Date()?'scheduled':j.status.replace(/_/g,' ')}</span>${j.publish_at?`<span class="pill">📅 ${new Date(j.publish_at).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}</span>`:''}${j.youtube_id?`<a class="pill" href="https://youtube.com/shorts/${esc(j.youtube_id)}" target="_blank" rel="noopener">▶ YouTube</a>`:''}<span class="pill">${esc(label[j.series]||j.series||'')}</span>${j.source!=='manual'?`<span class="pill">${esc(j.source)}</span>`:''}
+  <span class="pill ${j.status}">${j.status==='published'&&j.publish_at&&new Date(j.publish_at)>new Date()?'scheduled':j.status.replace(/_/g,' ')}</span>${j.publish_at?`<span class="pill">📅 ${new Date(j.publish_at).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}</span>`:''}${j.youtube_id?`<a class="pill" href="https://youtube.com/shorts/${esc(j.youtube_id)}" target="_blank" rel="noopener">▶ YouTube</a>`:''}<span class="pill">${esc(label[j.series]||j.series||'')}</span>${j.channel_id&&chName[j.channel_id]?`<span class="pill" style="color:#c7bfff">📺 ${esc(chName[j.channel_id])}</span>`:''}${j.source!=='manual'?`<span class="pill">${esc(j.source)}</span>`:''}
   <h3 style="margin:6px 0;font-size:16px">${esc(j.title||j.id)}</h3><div class="muted">${esc(j.description||'')}</div>${(j.hashtags||[]).length?`<div class="tags">${j.hashtags.map(t=>`<span class="flag">#${esc(t)}</span>`).join('')}${j.script_json&&j.script_json.seo?'<span class="flag gm" title="Title, caption and hashtags were rewritten by the LLM for YouTube Shorts">✨ optimized</span>':''}</div>`:''}${flagsFor(j)}<div class="muted" style="font-size:12px;margin-top:4px">${j.id} · ${new Date(j.created_at).toLocaleString()}${j.script_json&&j.script_json.script_source?' · script: '+esc(j.script_json.script_source):''}</div>
-  <div class="row" style="margin-top:12px">${j.status==='pending_review'?`<button onclick="act('/approve/${j.id}')">Approve</button><button class="bad" onclick="act('/reject/${j.id}')">Reject</button>`:''}${j.status==='approved'||j.status==='publish_failed'?`<button onclick="act('/publish/${j.id}/youtube')">Publish to YouTube now</button><input type="datetime-local" id="at-${j.id}"><button class="ghost" onclick="schedule('${j.id}')">📅 Schedule</button><button class="alt" onclick="act('/publish/${j.id}/instagram')">Publish to Instagram</button>`:''}${['script_ready','render_failed','failed'].includes(j.status)?`<button onclick="act('/render/${j.id}')">Render / retry</button>`:''}${['pending_review','approved','publish_failed','render_failed','script_ready'].includes(j.status)?`<button class="ghost" onclick="optimizeJob('${j.id}',this)" title="Rewrite title, caption and hashtags for YouTube Shorts">✨ Optimize caption</button>`:''}</div>
+  <div class="row" style="margin-top:12px">${j.status==='pending_review'?`<button onclick="act('/approve/${j.id}')">Approve</button><button class="bad" onclick="act('/reject/${j.id}')">Reject</button>`:''}${j.status==='approved'||j.status==='publish_failed'?`<button onclick="act('/publish/${j.id}/youtube')">Publish to YouTube now</button><input type="datetime-local" id="at-${j.id}"><button class="ghost" onclick="schedule('${j.id}')">📅 Schedule</button><button class="alt" onclick="act('/publish/${j.id}/instagram')">Publish to Instagram</button>`:''}${['script_ready','render_failed','failed'].includes(j.status)?`<button onclick="act('/render/${j.id}')">Render / retry</button>`:''}${['pending_review','approved','publish_failed','render_failed','script_ready'].includes(j.status)?`${CHS.length&&!j.youtube_id?`<select title="Channel" onchange="setJobChannel('${j.id}',this.value)"><option value="">No channel</option>${CHS.map(c=>`<option value="${c.id}" ${c.id===j.channel_id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>`:''}<button class="ghost" onclick="optimizeJob('${j.id}',this)" title="Rewrite title, caption and hashtags for YouTube Shorts">✨ Optimize caption</button>`:''}</div>
   ${j.error?`<pre style="margin-top:10px;color:var(--bad)">${esc(j.error)}</pre>`:''}</div></div>`).join('')||'<div class="card empty"><b>Nothing here</b>Videos you create will show up in this list.</div>'}
 async function schedule(id){const v=$('at-'+id).value;if(!v){alert('Pick a date and time first');return}
  try{const d=await api('/publish/'+id+'/youtube','POST',{confirm:true,publish_at:new Date(v).toISOString()});alert('Uploaded — goes public '+new Date(d.publish_at).toLocaleString())}catch(e){alert(e.message)}loadJobs()}
@@ -461,5 +474,26 @@ async function makeIdea(cat,idx,ai){try{const j=await api('/daily/make','POST',{
 async function refreshIdeas(){try{await api('/daily/refresh','POST')}catch(e){if(!/Already/.test(e.message)){alert(e.message);return}}loadIdeas()}
 async function optimizeJob(id,b){b.disabled=true;b.textContent='Optimizing…';try{await api('/optimize/'+id,'POST')}catch(e){alert(e.message)}loadJobs()}
 async function optimizeDraft(b){b.disabled=true;b.textContent='Optimizing…';try{const r=await api('/optimize/'+DRAFT.id,'POST');DRAFT.script=r.script;showDraft();$('msg').textContent='Title, caption and hashtags optimized.'}catch(e){$('msg').textContent=e.message;b.disabled=false;b.textContent='✨ Optimize caption & hashtags'}}
+/* ---------- channels ---------- */
+let CHS=[],CHT=[],CHE=null,CHP=null;
+async function setJobChannel(id,v){try{await api('/jobs/'+id+'/channel','POST',{channel_id:v||null})}catch(e){alert(e.message)}loadJobs()}
+async function loadChannels(){clearTimeout(CHP);let r;try{r=await api('/channels')}catch(e){$('chList').innerHTML=`<div class="card empty">${esc(e.message)}</div>`;return}
+ CHS=r.channels;CHT=r.topics;
+ $('chWarn').innerHTML=r.client_secret?'':'⚠ <b>Connect needs <code>credentials/client_secret.json</code></b> (a Google OAuth “Desktop app” client with YouTube Data API enabled). Everything else works without it.';
+ const lab=Object.fromEntries(CHT.map(t=>[t.id,t.label]));
+ $('chList').innerHTML=CHS.map(c=>`<div class="card"><div class="ch"><h2 style="font-size:17px">📺 ${esc(c.name)}</h2><span class="pill ${c.connected?'published':'pending_review'}" style="margin:0">${c.connected?'connected':'not connected'}</span><span class="sp"></span>
+   <button class="sm ${c.connected?'ghost':''}" onclick="connectChannel('${c.id}',this)">${c.connected?'Re-connect':'Connect YouTube'}</button><button class="sm ghost" onclick="editChannel('${c.id}')">Edit</button><button class="sm bad" onclick="delChannel('${c.id}')">Delete</button></div>
+   <div class="g g4" style="margin:0 0 12px">${[['Ready',c.ready],['In review',c.review],['Scheduled',c.scheduled],['Published',c.published]].map(([l,v])=>`<div class="tile" style="cursor:default"><div class="c">${l}</div><div class="h num" style="font-size:22px">${v}</div></div>`).join('')}</div>
+   <div class="tags" style="margin:0 0 6px">${c.topics.map(t=>`<span class="flag">${esc(lab[t]||t)}</span>`).join('')||'<span class="muted">No topics yet — edit to choose some.</span>'}</div>
+   <div class="muted" style="font-size:12.5px">Hashtags: ${c.tags.map(t=>'#'+esc(t)).join(' ')||'—'} · Slots: ${c.times.join(', ')} · Auto-schedule ${c.auto?'<b style="color:var(--ok)">on</b>':'off'}</div></div>`).join('')
+  ||'<div class="card empty"><b>No channels yet</b>Add the 5 suggested channels (satisfying, history, discipline, facts, psychology) or create your own.</div>'}
+function editChannel(id){CHE=id||null;const c=CHS.find(x=>x.id===id)||{name:'',tags:[],times:['09:00','14:00','19:00'],auto:false,topics:[]};
+ $('chFormT').textContent=id?'Edit channel':'New channel';$('chName').value=c.name;$('chTags').value=c.tags.join(', ');$('chTimes').value=c.times.join(',');$('chAuto').checked=c.auto;$('chMsg').textContent='';
+ $('chTopics').innerHTML=CHT.map(t=>`<label class="chk"><input type="checkbox" class="chT" value="${t.id}" ${c.topics.includes(t.id)?'checked':''}> ${esc(t.label)}</label>`).join('');$('chForm').hidden=false;$('chName').focus()}
+async function saveChannel(){const body={name:$('chName').value.trim(),tags:$('chTags').value.split(/[\s,]+/).filter(Boolean),times:$('chTimes').value.split(/[\s,]+/).filter(Boolean),auto:$('chAuto').checked,topics:[...document.querySelectorAll('.chT:checked')].map(x=>x.value)};
+ try{await api(CHE?'/channels/'+CHE:'/channels',CHE?'PUT':'POST',body);$('chForm').hidden=true;loadChannels()}catch(e){$('chMsg').textContent=e.message}}
+async function delChannel(id){if(!confirm('Delete this channel? Its videos stay, just without a channel.'))return;try{await api('/channels/'+id,'DELETE')}catch(e){alert(e.message)}loadChannels()}
+async function presetChannels(){try{await api('/channels/preset','POST')}catch(e){alert(e.message)}loadChannels()}
+async function connectChannel(id,b){b.disabled=true;try{await api('/channels/'+id+'/connect','POST');b.textContent='Finish sign-in in the browser window…';let n=0;const poll=async()=>{await loadChannels();const c=CHS.find(x=>x.id===id);if(c&&c.connected)return;if(++n<60)CHP=setTimeout(poll,3000)};CHP=setTimeout(poll,3000)}catch(e){alert(e.message);b.disabled=false}}
 init();
 </script></body></html>

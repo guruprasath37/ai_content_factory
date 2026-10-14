@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS ideas (
 );
 CREATE TABLE IF NOT EXISTS custom_series (slug TEXT PRIMARY KEY, spec_json TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS channels (
+ id TEXT PRIMARY KEY, name TEXT NOT NULL, topics TEXT NOT NULL DEFAULT '[]', tags TEXT NOT NULL DEFAULT '[]', times TEXT NOT NULL DEFAULT '["09:00","14:00","19:00"]',
+ auto INTEGER NOT NULL DEFAULT 0, token_file TEXT NOT NULL, created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS metrics (
  job_id TEXT NOT NULL, platform TEXT NOT NULL, fetched_at TEXT NOT NULL, views INTEGER, likes INTEGER, comments INTEGER,
  PRIMARY KEY (job_id, platform)
@@ -74,7 +78,7 @@ def init_db():
     con = sqlite3.connect(DB_PATH)
     con.executescript(SCHEMA)
     cols = {r[1] for r in con.execute("PRAGMA table_info(jobs)")}
-    for col, ddl in (("series", "TEXT"), ("topic", "TEXT"), ("source", "TEXT DEFAULT 'manual'"), ("provenance", "TEXT"), ("publish_at", "TEXT")):
+    for col, ddl in (("series", "TEXT"), ("topic", "TEXT"), ("source", "TEXT DEFAULT 'manual'"), ("provenance", "TEXT"), ("publish_at", "TEXT"), ("channel_id", "TEXT")):
         if col not in cols: con.execute(f"ALTER TABLE jobs ADD COLUMN {col} {ddl}")
     con.commit(); con.close()
 
@@ -714,7 +718,7 @@ def create_job(series, niche, topic, language, duration, made_for_kids=None, sou
     if series not in sr.SERIES: raise HTTPException(422, f"Unknown series '{series}'")
     job_id = uuid.uuid4().hex[:12]
     con = db()
-    con.execute("INSERT INTO jobs(id,created_at,updated_at,niche,status,series,topic,source) VALUES(?,?,?,?,?,?,?,?)", (job_id, now(), now(), niche, "generating", series, topic, source)); con.commit()
+    con.execute("INSERT INTO jobs(id,created_at,updated_at,niche,status,series,topic,source) VALUES(?,?,?,?,?,?,?,?)", (job_id, now(), now(), niche, "generating", series, topic, source)); con.commit(); assign_channel(job_id, series)
     try:
         single = bool(ai_video) and ai_provider == "gemini"   # Gemini makes one clip, so the video is one continuous shot
         data = make_script(series, niche, topic, language, duration, single, avoid)
@@ -741,7 +745,8 @@ def seo_apply(job_id: str) -> dict:
     hot = [k["word"] for k in ((trending_cached() or {}).get("keywords") or [])]
     try:
         out = seo.optimize({"title": job["title"], "description": job["description"], "hashtags": tags, "narration": narration,
-                            "topic": data.get("topic") or job["topic"], "highlight": data.get("highlight"), "series_label": label if job["series"] != "general" else ""}, hot)
+                            "topic": data.get("topic") or job["topic"], "highlight": data.get("highlight"), "series_label": label if job["series"] != "general" else "",
+                            "reach_tags": channel_tags(job["channel_id"]) + seo.REACH.get(data.get("daily_category") or job["series"], [])}, hot)
     except Exception as e:
         con.close(); raise HTTPException(500, f"Caption optimisation failed, nothing changed: {str(e)[:300]}")
     prev = (data.get("seo") or {}).get("previous") or {"title": job["title"], "description": job["description"], "hashtags": tags}
@@ -916,7 +921,7 @@ def publish_youtube(job_id:str, opts: PublishOptions | None = None):
         except ValueError: con.close(); raise HTTPException(422, "publish_at must be an ISO date-time")
         if when.timestamp() < time.time() + 15 * 60: con.close(); raise HTTPException(422, "Schedule at least 15 minutes ahead")
     secrets=ROOT / os.getenv("YOUTUBE_CLIENT_SECRETS", "credentials/client_secret.json")
-    token=ROOT / os.getenv("YOUTUBE_TOKEN_FILE", "credentials/youtube_token.json")
+    token=ROOT / (channel_token(job["channel_id"]) or os.getenv("YOUTUBE_TOKEN_FILE", "credentials/youtube_token.json"))
     if not secrets.exists(): con.close(); raise HTTPException(400,"Missing credentials/client_secret.json. See README for Google OAuth setup.")
     try:
         from google.oauth2.credentials import Credentials
@@ -1350,7 +1355,7 @@ def _licensed_job(p: Path, title: str, description: str, hashtags: list[str], st
     con = db()
     con.execute("INSERT INTO jobs(id,created_at,updated_at,niche,status,series,topic,source,title,description,hashtags,script_json,video_path,provenance) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (job_id, now(), now(), "licensed", status, "licensed", title, "licensed", title, description, json.dumps(tags), json.dumps(data, ensure_ascii=False), str(video), json.dumps(prov, ensure_ascii=False)))
-    con.commit(); con.close()
+    con.commit(); con.close(); assign_channel(job_id, "licensed")
     meta_p = p.with_suffix(".json"); m = json.loads(meta_p.read_text()); m.setdefault("jobs", []).append(job_id); meta_p.write_text(json.dumps(m, ensure_ascii=False))
     return job_id
 
@@ -1432,22 +1437,153 @@ def schedule_set(c: SchedConfig):
     set_setting("autoschedule", json.dumps({"enabled": c.enabled, "times": c.times})); set_setting("autoschedule_attempt", "")
     return schedule_get()
 
-def autoplan():
-    """Once per day, when enabled: schedule tomorrow's slots from the approved (ready) videos. Retried at most hourly."""
-    cfg = sched_config()
-    if not cfg["enabled"]: return
+def _autoplan_one(key: str, times: list[str], channel: str | None, label: str):
     day = (datetime.now().astimezone() + timedelta(days=1)).date().isoformat()
-    if get_setting("autoschedule_day") == day: return
-    last = get_setting("autoschedule_attempt")
+    if get_setting(f"autoschedule_day{key}") == day: return
+    last = get_setting(f"autoschedule_attempt{key}")
     if last and (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() < 3600: return
-    con = db(); ready = con.execute("SELECT COUNT(*) FROM jobs WHERE status='approved' AND youtube_id IS NULL").fetchone()[0]; con.close()
-    if not ready: return
-    set_setting("autoschedule_attempt", now())
-    slots = [datetime.fromisoformat(f"{day}T{t}").astimezone().astimezone(timezone.utc).isoformat() for t in cfg["times"]]
-    res = plan_day(DayPlan(slots=slots))["results"]
+    con = db(); rows = con.execute("SELECT channel_id FROM jobs WHERE status='approved' AND youtube_id IS NULL").fetchall(); con.close()
+    if not [r for r in rows if channel is None or (r["channel_id"] or "") == channel]: return
+    set_setting(f"autoschedule_attempt{key}", now())
+    slots = [datetime.fromisoformat(f"{day}T{t}").astimezone().astimezone(timezone.utc).isoformat() for t in times]
+    res = plan_day(DayPlan(slots=slots, channel=channel))["results"]
     ok = [r for r in res if not r.get("error")]
-    ap_log(f"Auto-schedule {day}: {len(ok)}/{len(res)} slots scheduled" + (f" ({res[0]['error'][:120]})" if not ok else ""))
-    if ok: set_setting("autoschedule_day", day)
+    ap_log(f"Auto-schedule {label} {day}: {len(ok)}/{len(res)} slots scheduled" + (f" ({res[0]['error'][:120]})" if not ok else ""))
+    if ok: set_setting(f"autoschedule_day{key}", day)
+
+def autoplan():
+    """Once per day, when enabled: schedule tomorrow's slots from the approved (ready) videos - per channel when channels exist. Retried at most hourly."""
+    cfg = sched_config(); chans = channels_all()
+    if cfg["enabled"]: _autoplan_one("", cfg["times"], "" if chans else None, "(no channel)")
+    for c in chans:
+        if c["auto"]: _autoplan_one("_" + c["id"], c["times"], c["id"], c["name"])
+
+# ---------------------------------------------------------------- channels (one YouTube channel per niche)
+def channels_all() -> list[dict]:
+    con = db(); rows = con.execute("SELECT * FROM channels ORDER BY created_at").fetchall(); con.close()
+    return [{**dict(r), "topics": json.loads(r["topics"]), "tags": json.loads(r["tags"]), "times": json.loads(r["times"]), "auto": bool(r["auto"])} for r in rows]
+
+def channel_for(series: str | None, category: str | None = None) -> str | None:
+    for c in channels_all():
+        if (category and category in c["topics"]) or (series and series in c["topics"]): return c["id"]
+    return None
+
+def assign_channel(job_id: str, series: str | None, category: str | None = None):
+    cid = channel_for(series, category)
+    if cid:
+        con = db(); con.execute("UPDATE jobs SET channel_id=? WHERE id=?", (cid, job_id)); con.commit(); con.close()
+
+def channel_tags(channel_id: str | None) -> list[str]:
+    c = next((c for c in channels_all() if c["id"] == channel_id), None)
+    return c["tags"] if c else []
+
+def channel_token(channel_id: str | None) -> str | None:
+    c = next((c for c in channels_all() if c["id"] == channel_id), None)
+    return c["token_file"] if c else None
+
+class ChannelIn(BaseModel):
+    name: str = Field(min_length=2, max_length=60)
+    topics: list[str] = Field(default_factory=list, max_length=20)   # series ids and/or daily-idea category ids this channel covers
+    tags: list[str] = Field(default_factory=list, max_length=6)      # signature hashtags (without #), used as the broad niche tag
+    times: list[str] = Field(default_factory=lambda: ["09:00", "14:00", "19:00"], min_length=1, max_length=6)
+    auto: bool = False
+
+PRESET_CHANNELS = [
+    {"name": "Satisfying Loops", "topics": ["satisfying", "transformations", "miniatures", "macro_asmr", "color_lab"], "tags": ["satisfying", "oddlysatisfying"]},
+    {"name": "History Unlocked", "topics": ["history"], "tags": ["history", "historyfacts"]},
+    {"name": "Daily Discipline", "topics": ["motivation", "daily_boost"], "tags": ["motivation", "discipline"]},
+    {"name": "Mind-Blown Facts", "topics": ["did_you_know", "mind_blown"], "tags": ["didyouknow", "facts"]},
+    {"name": "Psych Files", "topics": ["psychology"], "tags": ["psychology", "psychologyfacts"]},
+]
+
+def _clean_channel(c: ChannelIn) -> dict:
+    if not all(re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t) for t in c.times): raise HTTPException(422, "Times must be HH:MM (24-hour)")
+    bad = [t for t in c.topics if t not in sr.SERIES and t not in daily.CAT and t != "licensed"]
+    if bad: raise HTTPException(422, f"Unknown topics: {bad}")
+    return {"name": c.name.strip(), "topics": c.topics, "tags": [re.sub(r"[^\w]", "", t) for t in c.tags if re.sub(r"[^\w]", "", t)][:6], "times": c.times, "auto": c.auto}
+
+def _claim_jobs(cid: str, topics: list[str]):
+    """Videos that have no channel yet and fit this channel's topics join it (published ones are left alone)."""
+    con = db()
+    for r in con.execute("SELECT id,series,script_json FROM jobs WHERE channel_id IS NULL AND youtube_id IS NULL").fetchall():
+        cat = (json.loads(r["script_json"] or "{}") or {}).get("daily_category")
+        if r["series"] in topics or (cat and cat in topics): con.execute("UPDATE jobs SET channel_id=? WHERE id=?", (cid, r["id"]))
+    con.commit(); con.close()
+
+def _channel_row(c: dict) -> dict:
+    con = db(); n = lambda q: con.execute(q, (c["id"],)).fetchone()[0]
+    stats = {"ready": n("SELECT COUNT(*) FROM jobs WHERE channel_id=? AND status='approved' AND youtube_id IS NULL"), "review": n("SELECT COUNT(*) FROM jobs WHERE channel_id=? AND status='pending_review'"),
+             "scheduled": n(f"SELECT COUNT(*) FROM jobs WHERE channel_id=? AND youtube_id IS NOT NULL AND publish_at > '{now()}'"), "published": n("SELECT COUNT(*) FROM jobs WHERE channel_id=? AND youtube_id IS NOT NULL")}
+    con.close()
+    return {**c, **stats, "connected": (ROOT / c["token_file"]).exists()}
+
+@app.get("/channels")
+def channels_list():
+    return {"channels": [_channel_row(c) for c in channels_all()], "client_secret": (ROOT / os.getenv("YOUTUBE_CLIENT_SECRETS", "credentials/client_secret.json")).exists(),
+            "topics": [{"id": k, "label": v["label"].split(" — ")[0]} for k, v in sr.SERIES.items()] + [{"id": c["id"], "label": c["label"] + " (daily ideas)"} for c in daily.CATEGORIES]}
+
+def _insert_channel(d: dict) -> str:
+    cid = uuid.uuid4().hex[:8]; con = db()
+    con.execute("INSERT INTO channels(id,name,topics,tags,times,auto,token_file,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                (cid, d["name"], json.dumps(d["topics"]), json.dumps(d["tags"]), json.dumps(d["times"]), int(d["auto"]), f"credentials/youtube_token_{cid}.json", now()))
+    con.commit(); con.close(); _claim_jobs(cid, d["topics"]); return cid
+
+@app.post("/channels")
+def channels_create(c: ChannelIn):
+    _insert_channel(_clean_channel(c)); return channels_list()
+
+@app.post("/channels/preset")
+def channels_preset():
+    have = {c["name"] for c in channels_all()}
+    for p in PRESET_CHANNELS:
+        if p["name"] not in have: _insert_channel({**p, "times": ["09:00", "14:00", "19:00"], "auto": False})
+    return channels_list()
+
+@app.put("/channels/{cid}")
+def channels_update(cid: str, c: ChannelIn):
+    if not any(x["id"] == cid for x in channels_all()): raise HTTPException(404, "No such channel")
+    d = _clean_channel(c); con = db()
+    con.execute("UPDATE channels SET name=?,topics=?,tags=?,times=?,auto=? WHERE id=?", (d["name"], json.dumps(d["topics"]), json.dumps(d["tags"]), json.dumps(d["times"]), int(d["auto"]), cid))
+    con.commit(); con.close(); _claim_jobs(cid, d["topics"]); return channels_list()
+
+@app.delete("/channels/{cid}")
+def channels_delete(cid: str):
+    con = db(); con.execute("UPDATE jobs SET channel_id=NULL WHERE channel_id=?", (cid,)); con.execute("DELETE FROM channels WHERE id=?", (cid,)); con.commit(); con.close()
+    return channels_list()
+
+CONNECTING: set[str] = set()
+
+@app.post("/channels/{cid}/connect")
+def channels_connect(cid: str):
+    """Sign in to the Google account / brand channel this channel posts to. Opens a browser window on the machine running the app."""
+    ch = next((c for c in channels_all() if c["id"] == cid), None)
+    if not ch: raise HTTPException(404, "No such channel")
+    secrets_p = ROOT / os.getenv("YOUTUBE_CLIENT_SECRETS", "credentials/client_secret.json")
+    if not secrets_p.exists(): raise HTTPException(400, "Missing credentials/client_secret.json (Google OAuth client). See README.")
+    if cid in CONNECTING: raise HTTPException(409, "Sign-in already in progress; finish it in the browser window")
+    def run():
+        CONNECTING.add(cid)
+        try:
+            from google_auth_oauthlib.flow import InstalledAppFlow
+            creds = InstalledAppFlow.from_client_secrets_file(str(secrets_p), ["https://www.googleapis.com/auth/youtube.upload"]).run_local_server(port=0, timeout_seconds=300)
+            tok = ROOT / ch["token_file"]; tok.parent.mkdir(exist_ok=True); tok.write_text(creds.to_json()); tok.chmod(0o600)
+            ap_log(f"Channel '{ch['name']}' connected")
+        except Exception as e: ap_log(f"Channel '{ch['name']}' sign-in failed: {str(e)[:160]}")
+        finally: CONNECTING.discard(cid)
+    threading.Thread(target=run, daemon=True, name=f"connect-{cid}").start()
+    return {"started": True}
+
+class JobChannel(BaseModel):
+    channel_id: str | None = None
+
+@app.post("/jobs/{job_id}/channel")
+def job_set_channel(job_id: str, req: JobChannel):
+    if req.channel_id and not any(c["id"] == req.channel_id for c in channels_all()): raise HTTPException(404, "No such channel")
+    con = db(); r = con.execute("SELECT youtube_id FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not r: con.close(); raise HTTPException(404, "Job not found")
+    if r["youtube_id"]: con.close(); raise HTTPException(409, "Already on YouTube")
+    con.execute("UPDATE jobs SET channel_id=? WHERE id=?", (req.channel_id, job_id)); con.commit(); con.close()
+    return {"id": job_id, "channel_id": req.channel_id}
 
 # ---------------------------------------------------------------- trending topics (refreshed daily)
 def trending_cached() -> dict | None:
@@ -1522,7 +1658,7 @@ def daily_make(req: DailyMake):
     job_id = uuid.uuid4().hex[:12]; con = db()
     con.execute("INSERT INTO jobs(id,created_at,updated_at,niche,status,series,topic,source,title,description,hashtags,script_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (job_id, now(), now(), cat["label"], "script_ready", "general", sc["topic"], "daily", sc["title"], sc["description"], json.dumps(sc["hashtags"]), json.dumps(sc, ensure_ascii=False)))
-    con.commit(); con.close()
+    con.commit(); con.close(); assign_channel(job_id, "general", req.category)
     return {"id": job_id, "status": "script_ready", "script": sc}
 
 @app.get("/trending")
@@ -1537,11 +1673,13 @@ def trending_now():
 
 class DayPlan(BaseModel):
     slots: list[str] = Field(min_length=1, max_length=6)   # ISO times, in order
+    channel: str | None = None   # None = every channel; "" = videos without a channel; otherwise that channel's id
 
 @app.post("/plan/day")
 def plan_day(plan: DayPlan):
     """Schedule one day: 2 licensed re-posts and 1 own video (oldest approved first), in the order licensed, own, licensed."""
-    con = db(); rows = con.execute("SELECT id,source FROM jobs WHERE status='approved' AND youtube_id IS NULL ORDER BY created_at").fetchall(); con.close()
+    con = db(); rows = con.execute("SELECT id,source,channel_id FROM jobs WHERE status='approved' AND youtube_id IS NULL ORDER BY created_at").fetchall(); con.close()
+    if plan.channel is not None: rows = [r for r in rows if (r["channel_id"] or "") == plan.channel]
     lic = [r["id"] for r in rows if r["source"] == "licensed"]; own = [r["id"] for r in rows if r["source"] != "licensed"]
     want = ["licensed", "own", "licensed", "own", "licensed", "own"][:len(plan.slots)]
     picks, results = [], []

@@ -16,6 +16,19 @@ BANNED = {"fyp", "foryou", "foryoupage", "viral", "trending", "trend", "explore"
           "views", "boost", "xyz", "reels", "instagram", "tiktok", "love", "instagood", "video", "shortvideo", "shortsfeed", "ytshorts"}
 
 
+# Broad, genuinely on-topic tags with high search volume per category/series. One of them is always used as the "niche" tag, so each video
+# pairs specific tags (what it is) with a popular browse tag (where viewers look), which is how YouTube groups Shorts for discovery.
+REACH = {
+    "satisfying": ["satisfying", "oddlysatisfying", "asmr"], "history": ["history", "historyfacts", "ancienthistory"], "did_you_know": ["didyouknow", "facts", "amazingfacts"],
+    "motivation": ["motivation", "mindset", "discipline"], "psychology": ["psychology", "psychologyfacts", "mindset"], "music": ["music", "newmusic", "musictrends"],
+    "edits": ["videoediting", "edit", "cinematic"], "movie_clips": ["movies", "filmmaking", "cinema"],
+    "tiny_tales": ["kidsstories", "storytime", "bedtimestories"], "color_lab": ["satisfying", "colors", "artforkids"], "mind_blown": ["didyouknow", "facts", "science"],
+    "tech_tips": ["techtips", "technology", "lifehacks"], "daily_boost": ["motivation", "mindset", "positivity"], "transformations": ["satisfying", "oddlysatisfying", "transformation"],
+    "miniatures": ["miniature", "miniatures", "tinyworld"], "room_makeover": ["roommakeover", "interiordesign", "homedecor"], "macro_asmr": ["asmr", "macro", "satisfying"],
+    "impossible": ["physics", "science", "illusion"],
+}
+
+
 def _norm(t: str) -> str:
     return re.sub(r"[^a-z0-9]", "", t.lower())
 
@@ -35,6 +48,8 @@ def optimize(ctx: dict, hot_words: list[str] | None = None) -> dict:
     words = {w for w in re.findall(r"[a-z0-9]+", corpus.lower()) if len(w) >= 4}
     flat = _norm(corpus)
     hot = [w for w in (hot_words or []) if w][:14]
+    reach = [t for t in (ctx.get("reach_tags") or []) if t][:6]
+    reach_n = {_norm(t) for t in reach}
     system = ("You are a YouTube Shorts growth editor. You write honest metadata that matches the video, because Shorts are distributed by viewer response "
               "(swipe-away rate, watch time, replays, likes, comments, shares) and misleading metadata lowers retention and breaks YouTube's spam policy. Language: English.")
     user = (f"Video summary\n- Format/series: {ctx.get('series_label') or 'general'}\n- Topic: {ctx.get('topic') or ctx.get('title')}\n- Highlight: {ctx.get('highlight') or '-'}\n"
@@ -43,7 +58,8 @@ def optimize(ctx: dict, hot_words: list[str] | None = None) -> dict:
             "\nWrite:\n"
             "1. title: max 60 characters, main keyword within the first 40, a curiosity hook the video truthfully pays off, no ALL CAPS words, no emojis, no hashtags.\n"
             "2. description: 2-3 short sentences. Sentence 1 states what the video shows using the main keyword naturally; then one line of context; the last line is a specific question that invites comments. No hashtags, no links, no 'subscribe/like' begging.\n"
-            "3. hashtags: exactly 4 hashtags WITHOUT '#', each about this video's actual subject or format (one broad niche tag, two specific topic tags, one format tag). "
+            "3. hashtags: exactly 4 hashtags WITHOUT '#', each about this video's actual subject or format: ONE broad niche tag (high search volume), two specific topic tags, one format tag. "
+            + (f"Broad niche tag: pick exactly one of these popular tags that fits: {', '.join(reach)}. " if reach else "") +
             "Never use generic spam tags (fyp, viral, trending, foryou, explore). Do not include 'Shorts' (it is added for you).\n"
             "4. keywords: 5 search phrases a viewer would type to find this video.\n"
             'Return JSON: {"title":"...","description":"...","hashtags":["..."],"keywords":["..."]}')
@@ -61,9 +77,10 @@ def optimize(ctx: dict, hot_words: list[str] | None = None) -> dict:
             tag = re.sub(r"[^\w]", "", str(t))
             n = _norm(tag)
             if not tag or n in seen or n in BANNED or n == "shorts" or len(tag) > 30: continue
-            if not _related(tag, words, flat): continue   # not about this video
+            if n not in reach_n and not _related(tag, words, flat): continue   # not about this video (category browse tags are on-topic by definition)
             seen.add(n); tags.append(tag)
         if len(tags) < 2: raise ValueError(f"fewer than 2 hashtags are about this video's own subject (kept: {tags}); use words that appear in the topic or content")
         kw = [re.sub(r"\s+", " ", str(k)).strip()[:60] for k in (d.get("keywords") or []) if str(k).strip()][:6]
+        if reach and not any(_norm(t) in reach_n for t in tags): tags = [reach[0]] + [t for t in tags if _norm(t) != _norm(reach[0])]   # always carry one popular on-topic browse tag
         return {"title": title, "description": desc[:600], "hashtags": tags[:4] + ["Shorts"], "keywords": kw}
     return llm.chat_json(system, user, validate=check, temperature=0.6)
