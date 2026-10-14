@@ -25,7 +25,7 @@ REACH = {
     "tiny_tales": ["kidsstories", "storytime", "bedtimestories"], "color_lab": ["satisfying", "colors", "artforkids"], "mind_blown": ["didyouknow", "facts", "science"],
     "tech_tips": ["techtips", "technology", "lifehacks"], "daily_boost": ["motivation", "mindset", "positivity"], "transformations": ["satisfying", "oddlysatisfying", "transformation"],
     "miniatures": ["miniature", "miniatures", "tinyworld"], "room_makeover": ["roommakeover", "interiordesign", "homedecor"], "macro_asmr": ["asmr", "macro", "satisfying"],
-    "impossible": ["physics", "science", "illusion"],
+    "impossible": ["physics", "science", "illusion"], "asmr": ["asmr", "satisfying", "oddlysatisfying"], "miniature_build": ["miniature", "miniatures", "tinyworld"],
 }
 
 

@@ -1556,11 +1556,8 @@ class ChannelIn(BaseModel):
     auto: bool = False
 
 PRESET_CHANNELS = [
-    {"name": "Satisfying Loops", "topics": ["satisfying", "transformations", "miniatures", "macro_asmr", "color_lab"], "tags": ["satisfying", "oddlysatisfying"]},
-    {"name": "History Unlocked", "topics": ["history"], "tags": ["history", "historyfacts"]},
-    {"name": "Daily Discipline", "topics": ["motivation", "daily_boost"], "tags": ["motivation", "discipline"]},
-    {"name": "Mind-Blown Facts", "topics": ["did_you_know", "mind_blown"], "tags": ["didyouknow", "facts"]},
-    {"name": "Psych Files", "topics": ["psychology"], "tags": ["psychology", "psychologyfacts"]},
+    {"name": "Satisfying ASMR", "topics": ["satisfying", "asmr", "transformations", "macro_asmr", "color_lab"], "tags": ["satisfying", "asmr"]},
+    {"name": "Miniature Build", "topics": ["miniature_build", "miniatures"], "tags": ["miniature", "miniatures"]},
 ]
 
 def _clean_channel(c: ChannelIn) -> dict:
@@ -1749,8 +1746,9 @@ def daily_cached() -> dict | None:
 def _daily_run():
     DAILY.update(running=True, progress="starting", partial=None)
     try:
-        def seen(res): DAILY["partial"] = res; DAILY["progress"] = f"{len(res['categories'])}/{len(daily.CATEGORIES)} categories"
-        res = daily.build(os.getenv("TRENDING_REGION", "IN"), seen, daily_cached())
+        def seen(res): DAILY["partial"] = res; DAILY["progress"] = f"{len(res['categories'])}/{res.get('planned', len(daily.CATEGORIES))} categories"
+        only = {t for c in channels_all() for t in c["topics"]} & set(daily.CAT)   # only the niches your channels cover; all of them when you have no channels
+        res = daily.build(os.getenv("TRENDING_REGION", "IN"), seen, daily_cached(), only=only or None)
         if any(c["ideas"] for c in res["categories"]): set_setting("daily_ideas", json.dumps(res, ensure_ascii=False))   # keep yesterday's if everything failed
         ap_log(f"Daily ideas: {sum(len(c['ideas']) for c in res['categories'])} ideas" + (f" ({len(res['errors'])} problems)" if res["errors"] else ""))
     except Exception as e: ap_log(f"Daily ideas failed: {str(e)[:200]}")

@@ -180,7 +180,7 @@ pre{white-space:pre-wrap;margin:0;font:12px/1.55 ui-monospace,SFMono-Regular,Men
 <div id="jobs"></div></section>
 
 <section class="tab" id="t-channels">
- <div class="hero"><div><h2>Your channels</h2><p>Each channel covers some topics. New videos join the channel that matches their topic, use that channel's login and hashtags, and are scheduled on its slots.</p></div><span class="sp"></span><button class="alt" onclick="presetChannels()">✨ Add the 5 suggested channels</button><button onclick="editChannel()">＋ New channel</button></div>
+ <div class="hero"><div><h2>Your channels</h2><p>Each channel covers some topics. New videos join the channel that matches their topic, use that channel's login and hashtags, and are scheduled on its slots.</p></div><span class="sp"></span><button class="alt" onclick="presetChannels()">✨ Add the 2 starter channels</button><button onclick="editChannel()">＋ New channel</button></div>
  <div class="card"><div class="ch"><h2>Sort &amp; schedule</h2></div>
   <p class="muted" style="margin-top:-4px">1 · The AI files every unassigned video into the channel whose niche fits (unclear ones stay out). 2 · Each channel's ready videos are paired with its daily slots (in random order) and uploaded as scheduled posts, one batch per channel. YouTube's default quota allows about 6 uploads a day, so each press uploads up to that cap, spread across channels; the rest stay ready.</p>
   <div class="row"><button class="alt" id="srtBtn" onclick="sortChannels()">1 · Sort videos into channels</button>
@@ -495,7 +495,7 @@ async function loadChannels(){clearTimeout(CHP);let r;try{r=await api('/channels
    <div class="g g4" style="margin:0 0 12px">${[['Ready',c.ready],['In review',c.review],['Scheduled',c.scheduled],['Published',c.published]].map(([l,v])=>`<div class="tile" style="cursor:default"><div class="c">${l}</div><div class="h num" style="font-size:22px">${v}</div></div>`).join('')}</div>
    <div class="tags" style="margin:0 0 6px">${c.topics.map(t=>`<span class="flag">${esc(lab[t]||t)}</span>`).join('')||'<span class="muted">No topics yet — edit to choose some.</span>'}</div>
    <div class="muted" style="font-size:12.5px">Hashtags: ${c.tags.map(t=>'#'+esc(t)).join(' ')||'—'} · Slots: ${c.times.join(', ')} · Auto-schedule ${c.auto?'<b style="color:var(--ok)">on</b>':'off'}</div></div>`).join('')
-  ||'<div class="card empty"><b>No channels yet</b>Add the 5 suggested channels (satisfying, history, discipline, facts, psychology) or create your own.</div>'}
+  ||'<div class="card empty"><b>No channels yet</b>Add the 2 starter channels (Satisfying ASMR, Miniature Build) or create your own.</div>'}
 function editChannel(id){CHE=id||null;const c=CHS.find(x=>x.id===id)||{name:'',tags:[],times:['09:00','14:00','19:00'],auto:false,topics:[]};
  $('chFormT').textContent=id?'Edit channel':'New channel';$('chName').value=c.name;$('chTags').value=c.tags.join(', ');$('chTimes').value=c.times.join(',');$('chAuto').checked=c.auto;$('chMsg').textContent='';
  $('chTopics').innerHTML=CHT.map(t=>`<label class="chk"><input type="checkbox" class="chT" value="${t.id}" ${c.topics.includes(t.id)?'checked':''}> ${esc(t.label)}</label>`).join('');$('chForm').hidden=false;$('chName').focus()}

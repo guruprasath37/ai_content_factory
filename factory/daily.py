@@ -17,6 +17,12 @@ CATEGORIES: list[dict] = [
     {"id": "satisfying", "label": "Satisfying", "queries": ["oddly satisfying", "satisfying transformation"],
      "about": "oddly satisfying visuals: materials cut, morphing, flowing, perfect fits, loops", "highlight": "the satisfying type, e.g. 'Kinetic sand cutting' or 'Liquid metal morph'",
      "rules": "Visuals are rich, concrete shots (materials, finish, colour, motion, camera). Narration is sparse and teasing."},
+    {"id": "asmr", "label": "ASMR", "queries": ["asmr satisfying", "asmr sounds shorts"],
+     "about": "ASMR-style satisfying clips where the sound is the star: cutting, crunching, tapping, pouring, scraping, slime and sand", "highlight": "the ASMR trigger, e.g. 'Crunchy kinetic sand slicing' or 'Glass tapping rhythm'",
+     "rules": "Macro close-ups with slow, tactile motion and strong implied sound (name the texture and the sound in the visual). Narration is minimal: one short teasing line per scene at most."},
+    {"id": "miniature_build", "label": "Miniature build", "queries": ["miniature build", "tiny diorama build"],
+     "about": "satisfying miniature builds: tiny rooms, dioramas, houses, kitchens and gardens built step by step in fast, precise motion", "highlight": "what is being built, e.g. 'Tiny cosy library room' or 'Miniature japanese garden'",
+     "rules": "Each idea is ONE build shown in stages (base, structure, details, final reveal) in tilt-shift miniature style; materials are named (clay, wood, resin, moss, LEDs). Visuals are original builds, no brand logos."},
     {"id": "history", "label": "History facts", "queries": ["history facts", "ancient history shorts"],
      "about": "surprising, well-documented history facts", "highlight": "the fact in a few words, e.g. 'Fact: Cleopatra lived closer to the Moon landing than to the pyramids'",
      "rules": "Only well-established facts, no made-up numbers or dates. Visuals are atmospheric reconstructions (landscapes, objects, architecture), not real people."},
@@ -91,11 +97,13 @@ def ideas(cat: dict, ev: list[dict], n: int = 2, duration: int = 30, avoid: list
     return llm.chat_json(system, user, validate=check, temperature=0.85)[:n]
 
 
-def build(region: str, on_progress: Callable[[dict], None], previous: dict | None = None, n: int = 2, duration: int = 30) -> dict:
+def build(region: str, on_progress: Callable[[dict], None], previous: dict | None = None, n: int = 2, duration: int = 30, only: set[str] | None = None) -> dict:
     """Generate today's ideas for every category. on_progress gets the partial result after each category so the UI fills in live."""
     used = [i["topic"] for c in (previous or {}).get("categories", []) for i in c.get("ideas", [])]
     res = {"date": datetime.now().astimezone().date().isoformat(), "generated_at": datetime.now(timezone.utc).isoformat(), "region": region, "duration": duration, "categories": [], "errors": []}
-    for cat in CATEGORIES:
+    cats = [c for c in CATEGORIES if not only or c["id"] in only]
+    res["planned"] = len(cats)
+    for cat in cats:
         entry = {"id": cat["id"], "label": cat["label"], "evidence": [], "median_views": 0, "ideas": []}
         try: entry["evidence"] = evidence(cat, region)
         except Exception as e: res["errors"].append(f"{cat['label']} (YouTube): {str(e)[:120]}")
