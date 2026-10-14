@@ -181,6 +181,11 @@ pre{white-space:pre-wrap;margin:0;font:12px/1.55 ui-monospace,SFMono-Regular,Men
 
 <section class="tab" id="t-channels">
  <div class="hero"><div><h2>Your channels</h2><p>Each channel covers some topics. New videos join the channel that matches their topic, use that channel's login and hashtags, and are scheduled on its slots.</p></div><span class="sp"></span><button class="alt" onclick="presetChannels()">✨ Add the 5 suggested channels</button><button onclick="editChannel()">＋ New channel</button></div>
+ <div class="card"><div class="ch"><h2>Sort &amp; schedule</h2></div>
+  <p class="muted" style="margin-top:-4px">1 · The AI files every unassigned video into the channel whose niche fits (unclear ones stay out). 2 · Each channel's ready videos are paired with its daily slots and uploaded as scheduled posts, one batch per channel. YouTube's default quota allows about 6 uploads a day, so each press uploads up to that cap, spread across channels; the rest stay ready.</p>
+  <div class="row"><button class="alt" id="srtBtn" onclick="sortChannels()">1 · Sort videos into channels</button>
+  <label>Days ahead<input id="schDays" type="number" value="3" min="1" max="14" style="width:80px"></label><label>Max uploads now<input id="schCap" type="number" value="6" min="1" max="50" style="width:90px"></label>
+  <button id="schBtn" onclick="scheduleAll()">2 · Schedule all channels</button></div><div id="schOut" class="muted" style="margin-top:12px"></div></div>
  <div class="muted" id="chWarn" style="margin-bottom:12px"></div>
  <div class="card" id="chForm" hidden><div class="ch"><h2 id="chFormT">New channel</h2></div>
   <div class="row"><label style="flex:1;min-width:200px">Channel name<input id="chName" style="width:100%" maxlength="60"></label>
@@ -505,5 +510,12 @@ async function listProfile(){const b=$('pfBtn'),m=$('pfMsg');b.disabled=true;m.t
    +r.items.map(i=>`<label class="hl chk" style="padding:5px 0"><input type="checkbox" class="pfC" value="${esc(i.url)}" checked><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.title||i.url)}</span><span class="muted" style="font-size:12px">${i.duration?Math.round(i.duration)+'s':''}</span></label>`).join('')}
  catch(e){m.textContent=e.message}b.disabled=false}
 function pfToBatch(){const u=[...document.querySelectorAll('.pfC:checked')].map(x=>x.value);if(!u.length)return;$('bUrls').value=($('bUrls').value.trim()?$('bUrls').value.trim()+'\n':'')+u.join('\n');$('pfMsg').textContent=`${u.length} link(s) added to the batch below. Confirm permission there, then fetch.`;$('bUrls').scrollIntoView({behavior:'smooth',block:'center'})}
+async function sortChannels(){const b=$('srtBtn'),o=$('schOut');b.disabled=true;o.textContent='Sorting with the AI…';
+ try{const r=await api('/channels/sort','POST');o.innerHTML=`<b>${r.total}</b> unassigned video${r.total===1?'':'s'} checked: ${Object.entries(r.sorted).map(([k,v])=>`${esc(k)} <b>${v}</b>`).join(' · ')}${r.unmatched.length?`<br>No clear fit (left unassigned): ${r.unmatched.map(esc).join('; ')}`:''}`;loadChannels()}
+ catch(e){o.textContent=e.message}b.disabled=false}
+async function scheduleAll(){const b=$('schBtn'),o=$('schOut');b.disabled=true;o.textContent='Uploading to YouTube… (can take a few minutes)';
+ try{const r=await api('/channels/schedule-all','POST',{days:+$('schDays').value||3,max_uploads:+$('schCap').value||null});
+  o.innerHTML=`<b>${r.uploaded}</b> upload${r.uploaded===1?'':'s'} scheduled (cap ${r.cap}).`+r.channels.map(c=>`<div class="hl" style="padding:4px 0"><span class="dot ${c.scheduled.length?'ok':c.errors.length?'bad':''}"></span><b style="margin:0;max-width:none">${esc(c.channel)}</b><span style="flex:1;text-align:right">${c.scheduled.length?c.scheduled.length+' scheduled · '+c.scheduled.slice(0,3).map(x=>fmtWhen(x.at)).join(', '):''} ${esc(c.note||'')} <span style="color:var(--bad)">${esc(c.errors[0]||'')}</span></span></div>`).join('');loadChannels()}
+ catch(e){o.textContent=e.message}b.disabled=false}
 init();
 </script></body></html>

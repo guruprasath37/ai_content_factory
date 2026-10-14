@@ -1616,6 +1616,75 @@ def channels_connect(cid: str):
     threading.Thread(target=run, daemon=True, name=f"connect-{cid}").start()
     return {"started": True}
 
+SORTABLE = ("approved", "pending_review", "script_ready")
+
+@app.post("/channels/sort")
+def channels_sort():
+    """Filter videos that have no channel yet into the channel whose niche fits (LLM reads title, caption and tags). Unfitting videos stay unassigned."""
+    chans = channels_all()
+    if not chans: raise HTTPException(409, "Create your channels first")
+    con = db(); rows = con.execute(f"SELECT id,title,description,hashtags,series FROM jobs WHERE channel_id IS NULL AND youtube_id IS NULL AND status IN ({','.join('?' * len(SORTABLE))}) ORDER BY created_at", SORTABLE).fetchall(); con.close()
+    lab = {k: v["label"].split(" — ")[0] for k, v in sr.SERIES.items()} | {c["id"]: c["label"] for c in daily.CATEGORIES}
+    desc = "\n".join(f"- {c['id']}: {c['name']} (covers: {', '.join(lab.get(t, t) for t in c['topics']) or 'anything'}; tags: {', '.join(c['tags'])})" for c in chans)
+    valid = {c["id"] for c in chans}; out = {c["id"]: 0 for c in chans}; unmatched = []
+    for i in range(0, len(rows), 25):
+        chunk = rows[i:i + 25]
+        items = "\n".join(f"{n}. {r['title']} | {(r['description'] or '')[:140]} | {' '.join(json.loads(r['hashtags'] or '[]')[:8])}" for n, r in enumerate(chunk))
+        user = (f"Channels:\n{desc}\n\nVideos (number. title | caption | hashtags):\n{items}\n\n"
+                "Assign each video to the ONE channel whose niche it clearly fits. If none fits well, use null - do not force a match.\n"
+                'Return JSON: {"assignments":[{"n":0,"channel":"channel id or null"}]}')
+        def check(d, size=len(chunk)):
+            a = d.get("assignments") if isinstance(d, dict) else None
+            if not isinstance(a, list): raise ValueError("'assignments' must be an array")
+            m = {int(x["n"]): x.get("channel") for x in a if isinstance(x, dict) and str(x.get("n", "")).isdigit() and int(x["n"]) < size}
+            if len(m) < size: raise ValueError(f"give an assignment for every video number 0-{size - 1}")
+            return {k: (v if v in valid else None) for k, v in m.items()}
+        try: m = llm.chat_json("You sort short videos into YouTube channels by topic. Be strict: only assign a clear topical fit.", user, validate=check, temperature=0.1)
+        except Exception as e: raise HTTPException(500, f"Sorting failed after {i} videos: {str(e)[:300]}")
+        con = db()
+        for n, r in enumerate(chunk):
+            cid = m.get(n)
+            if cid: con.execute("UPDATE jobs SET channel_id=? WHERE id=?", (cid, r["id"])); out[cid] += 1
+            else: unmatched.append(r["title"])
+        con.commit(); con.close()
+    return {"sorted": {c["name"]: out[c["id"]] for c in chans}, "unmatched": unmatched, "total": len(rows)}
+
+class ScheduleAll(BaseModel):
+    days: int = Field(default=3, ge=1, le=14)
+    max_uploads: int | None = Field(default=None, ge=1, le=50)
+
+@app.post("/channels/schedule-all")
+def channels_schedule_all(req: ScheduleAll):
+    """One batch per channel: pair each channel's ready videos with its daily slots (starting tomorrow, up to `days` days) and upload them to that
+    channel as scheduled posts. Uploads are interleaved across channels and capped per call because YouTube's default API quota allows only
+    ~6 uploads a day (1,600 units each of 10,000); the rest stay ready and are picked up by the next call / auto-schedule."""
+    cap = req.max_uploads or int(os.getenv("YT_UPLOADS_PER_RUN", "6"))
+    con = db(); rows = con.execute("SELECT id,channel_id,source FROM jobs WHERE status='approved' AND youtube_id IS NULL AND channel_id IS NOT NULL ORDER BY created_at").fetchall(); con.close()
+    report, queues = [], []
+    for c in channels_all():
+        ready = [r["id"] for r in rows if r["channel_id"] == c["id"]]
+        entry = {"channel": c["name"], "ready": len(ready), "scheduled": [], "errors": [], "note": ""}
+        report.append(entry)
+        if not ready: entry["note"] = "no ready videos"; continue
+        if not (ROOT / c["token_file"]).exists(): entry["note"] = "not connected to YouTube yet (press Connect)"; continue
+        slots = []
+        for d in range(1, req.days + 1):
+            day = (datetime.now().astimezone() + timedelta(days=d)).date().isoformat()
+            slots += [datetime.fromisoformat(f"{day}T{t}").astimezone().astimezone(timezone.utc).isoformat() for t in c["times"]]
+        queues.append((entry, list(zip(ready, slots))))
+    done, stop = 0, False
+    while done < cap and not stop and any(q for _, q in queues):
+        for entry, q in queues:
+            if not q or done >= cap: continue
+            jid, slot = q.pop(0)
+            try: r = publish_youtube(jid, PublishOptions(publish_at=slot)); entry["scheduled"].append({"id": jid, "at": r["publish_at"]}); done += 1
+            except HTTPException as e:
+                entry["errors"].append(str(e.detail)[:200])
+                if "quota" in str(e.detail).lower(): stop = True; break
+    for entry, q in queues:
+        if q: entry["note"] = f"{len(q)} more ready (daily upload cap reached; run again tomorrow or let auto-schedule continue)"
+    return {"uploaded": done, "cap": cap, "channels": report}
+
 class JobChannel(BaseModel):
     channel_id: str | None = None
 
