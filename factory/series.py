@@ -175,6 +175,16 @@ EXAMPLE = ('{"title":"Why Octopuses Have Three Hearts","description":"Two short 
            '"hook":"One sentence hook.","scenes":[{"narration":"One natural spoken sentence.","visual":"short visual cue","stock_query":"octopus underwater"}]}')
 
 
+# No-series option: a plain video on whatever topic you give (or the AI picks). Listed first.
+SERIES = {"general": {
+    "label": "No series — any topic", "visual": "stock", "kids": False, "stock_prefix": "", "vivid": False,
+    "idea_brief": "interesting, accurate, broadly appealing short-video topics from any field (science, tech, history, money, health, nature, culture)",
+    "brief": ("A short, engaging video on the given topic: a punchy hook in scene 1, a few clear points that are accurate (no myths, no made-up numbers), "
+              "and a one-line closing thought. Each scene's stock_query must be a concrete, filmable description of real footage."),
+    "tags": ["Shorts"],
+}, **SERIES}
+
+
 def register(slug: str, spec: dict) -> None:
     """Add (or replace) a series at runtime - used for niches adopted from research."""
     SERIES[slug] = spec

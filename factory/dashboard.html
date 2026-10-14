@@ -1,46 +1,161 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Content Factory</title>
 <style>
-:root{--bg:#0b1020;--card:#151d34;--line:#2b385a;--text:#f4f6ff;--muted:#aab4d0;--accent:#8de6cc;--warn:#ffcc9e;--bad:#ff8a9b}
-*{box-sizing:border-box}body{font:15px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--text);max-width:1100px;margin:24px auto;padding:0 16px}
-h1{margin:0 0 2px}h2{margin:0 0 10px;font-size:18px}.muted{color:var(--muted)}a{color:var(--accent)}
-nav{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0;border-bottom:1px solid var(--line);padding-bottom:10px}
-nav button{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:600}nav button.on{background:var(--accent);color:#102126;border-color:var(--accent)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
-.scriptbox{border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}.scriptbox h3{margin:0 0 4px}.scriptbox ol{margin:10px 0;padding-left:22px}.scriptbox li{margin:0 0 8px}.scriptbox .vis{font-size:12px}.scriptbox .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}.scriptbox .gem{border:1px dashed var(--line);border-radius:10px;padding:10px;margin:10px 0}.scriptbox .gem textarea{width:100%;box-sizing:border-box;font-size:12px}
-input,select,button,textarea{font:inherit;border-radius:8px;padding:9px 11px;border:1px solid #344362}input,select,textarea{background:var(--bg);color:var(--text);max-width:100%}
-button{cursor:pointer;background:var(--accent);color:#102126;border:0;font-weight:700}button.alt{background:var(--warn)}button.ghost{background:transparent;color:var(--text);border:1px solid #344362}button.bad{background:var(--bad)}button:disabled{opacity:.5;cursor:wait}
-[hidden]{display:none!important}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.row>label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
-.job{display:grid;grid-template-columns:150px 1fr;gap:14px}.job video{width:150px;border-radius:10px;background:#000}@media(max-width:600px){.job{grid-template-columns:1fr}}
-.pill{display:inline-block;font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--accent);margin-right:6px}
-.pill.pending_review{color:#ffe28a}.pill.failed,.pill.render_failed,.pill.publish_failed,.pill.rejected{color:var(--bad)}.pill.published{color:#9bff9b}
-.stat{font-size:28px;font-weight:800}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600;font-size:13px}
-pre{white-space:pre-wrap;margin:0;font-size:12.5px;color:#d6def7}.bar{display:flex;align-items:end;gap:4px;height:80px}.bar div{flex:1;background:var(--accent);border-radius:4px 4px 0 0;min-height:2px}
-.flags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}.flag{font-size:12px;padding:3px 9px;border-radius:8px;border:1px solid var(--line);white-space:nowrap}
-.flag.llm{color:#9ec5ff;border-color:#3a5a99}.flag.ltx{color:#d6b3ff;border-color:#6b4a99}.flag.kl{color:#7fe3ff;border-color:#2f7f99}.flag.af{color:#ffe17f;border-color:#99852f}.flag.gm{color:#b9f6ca;border-color:#3f8a6a}.flag.stock{color:#9bffb0;border-color:#3f8a55}.flag.drawn{color:#ffd28a;border-color:#8a6a3a}.flag.voice{color:#ffb3d9;border-color:#8a3f66}.flag.ff{color:#c9d3ea}.flag.warn{color:#ffcc9e;border-color:#b3743a;background:#2a1d10}
-.tab{display:none}.tab.on{display:block}.chk{display:flex;gap:6px;align-items:center;flex-direction:row!important;color:var(--text)!important;font-size:14px!important}
+:root{--bg:#09090d;--surface:#111117;--surface2:#171720;--line:#23232f;--line2:#2e2e3d;--text:#ececf2;--muted:#8d8da0;--accent:#7c6cff;--accent-d:#6657e6;--accent-soft:rgba(124,108,255,.14);--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--info:#60a5fa;--r:14px;--side:232px}
+*{box-sizing:border-box}html{color-scheme:dark}
+body{margin:0;font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}h2{font-size:15px}h3{font-size:14px}.muted{color:var(--muted)}a{color:#a99fff;text-decoration:none}a:hover{text-decoration:underline}
+code{background:var(--surface2);padding:1px 6px;border-radius:6px;font-size:12px}
+svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+/* shell */
+.shell{display:grid;grid-template-columns:var(--side) 1fr;min-height:100vh}
+aside{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px;padding:18px 12px;background:var(--surface);border-right:1px solid var(--line);overflow:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 16px;font-weight:700;font-size:15px}
+.logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#7c6cff,#c084fc 60%,#f0abfc);display:grid;place-items:center;color:#fff}
+.grp{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#62627a;padding:14px 12px 6px}
+.nav{display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;border-radius:9px;background:transparent;color:var(--muted);border:0;font-weight:550;text-align:left;cursor:pointer;position:relative}
+.nav:hover{background:var(--surface2);color:var(--text)}.nav.on{background:var(--accent-soft);color:#fff}.nav.on svg.i{color:#a99fff}
+.nav .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:11px;font-weight:700;border-radius:99px;padding:0 7px;min-width:20px;text-align:center}
+.nav .dot{margin-left:auto}
+.side-foot{margin-top:auto;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.side-foot .t{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#62627a;margin-bottom:8px}
+.hl{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);padding:2px 0}.hl b{color:var(--text);font-weight:550;margin-left:auto;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:#4b4b5c;flex:none}.dot.ok{background:var(--ok);box-shadow:0 0 0 3px rgba(52,211,153,.15)}.dot.bad{background:var(--bad)}.dot.run{background:var(--ok);animation:pulse 1.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}100%{box-shadow:0 0 0 9px rgba(52,211,153,0)}}
+main{min-width:0;padding:0 32px 48px}
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:18px 0 14px;margin-bottom:6px;background:linear-gradient(var(--bg) 78%,transparent)}
+.top h1{font-size:21px}.top .sub{color:var(--muted);font-size:13px;margin-top:1px}.top .sp{flex:1}
+.apchip{display:flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--line);border-radius:99px;background:var(--surface);font-size:12.5px;color:var(--muted);cursor:pointer}
+.apchip:hover{border-color:var(--line2);color:var(--text)}
+/* primitives */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin:0 0 16px}
+.card>h2:first-child,.ch{display:flex;align-items:center;gap:8px;margin:0 0 12px}.ch h2{margin:0}.ch .sp{flex:1}.ch a,.ch .lnk{font-size:12.5px;color:#a99fff;cursor:pointer;font-weight:550}
+.card.flat{padding:0;overflow:hidden}
+.g{display:grid;gap:16px;margin-bottom:16px}.g>.card{margin:0}.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1.5fr 1fr}.g2e{grid-template-columns:1fr 1fr}
+@media(max-width:1180px){.g4{grid-template-columns:repeat(2,1fr)}.g2,.g2e,.g3{grid-template-columns:1fr}}
+.kpi{position:relative;overflow:hidden}.kpi .l{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12.5px;font-weight:550}.kpi .ico{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--accent-soft);color:#a99fff}
+.kpi .v{font-size:30px;font-weight:700;letter-spacing:-.02em;margin:10px 0 2px}.kpi .s{font-size:12px;color:var(--muted)}.kpi svg.spark{position:absolute;right:12px;bottom:12px;width:96px;height:36px;opacity:.9}
+.kpi.ok .ico{background:rgba(52,211,153,.13);color:var(--ok)}.kpi.warn .ico{background:rgba(251,191,36,.13);color:var(--warn)}.kpi.info .ico{background:rgba(96,165,250,.13);color:var(--info)}
+.act{display:flex;gap:14px;align-items:flex-start;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;text-align:left;color:var(--text);transition:.15s;font-weight:400;width:100%}
+.act:hover{border-color:var(--accent);transform:translateY(-1px);background:var(--surface2)}.act .ico{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,rgba(124,108,255,.28),rgba(192,132,252,.18));color:#c7bfff;flex:none}
+.act b{display:block;font-size:14.5px;margin-bottom:2px}.act span{color:var(--muted);font-size:12.5px;display:block}
+input,select,button,textarea{font:inherit;border-radius:9px;padding:8px 12px;border:1px solid var(--line2)}
+input,select,textarea{background:var(--bg);color:var(--text);max-width:100%;transition:border-color .12s,box-shadow .12s}input:focus,select:focus,textarea:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;height:16px;padding:0}
+button{cursor:pointer;background:var(--accent);color:#fff;border:1px solid var(--accent);font-weight:600;transition:.12s}button:hover{background:var(--accent-d)}
+button.alt{background:var(--surface2);color:var(--text);border-color:var(--line2)}button.alt:hover{border-color:var(--accent);background:var(--surface2)}
+button.ghost{background:transparent;color:var(--text);border-color:var(--line2)}button.ghost:hover{background:var(--surface2)}
+button.bad{background:transparent;color:var(--bad);border-color:rgba(248,113,113,.4)}button.bad:hover{background:rgba(248,113,113,.1)}
+button.sm{padding:5px 10px;font-size:12.5px}button:disabled{opacity:.5;cursor:wait}
+[hidden]{display:none!important}.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}.row>label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--muted);font-weight:550}
+.chk{display:flex;gap:8px;align-items:center;flex-direction:row!important;color:var(--text)!important;font-size:14px!important;font-weight:450!important}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}.grid .card{margin:0}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;padding:2px 9px;border-radius:99px;background:var(--surface2);border:1px solid var(--line2);color:var(--muted);margin:0 6px 4px 0}
+.pill.pending_review{color:var(--warn);border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.08)}.pill.approved{color:var(--info);border-color:rgba(96,165,250,.35);background:rgba(96,165,250,.08)}
+.pill.failed,.pill.render_failed,.pill.publish_failed,.pill.rejected{color:var(--bad);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.08)}.pill.published{color:var(--ok);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.08)}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}tr:last-child td{border-bottom:0}tbody tr:hover td{background:rgba(255,255,255,.015)}
+.tw{overflow-x:auto}.num{font-variant-numeric:tabular-nums}
+pre{white-space:pre-wrap;margin:0;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c4c4d4}
+.flags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}.flag{font-size:11.5px;padding:2px 9px;border-radius:7px;border:1px solid var(--line2);white-space:nowrap;background:var(--surface2)}
+.flag.llm{color:#9ec5ff}.flag.ltx{color:#d6b3ff}.flag.kl{color:#7fe3ff}.flag.af{color:#ffe17f}.flag.gm{color:#b9f6ca}.flag.stock{color:#9bffb0}.flag.drawn{color:#ffd28a}.flag.voice{color:#ffb3d9}.flag.ff{color:#c9d3ea}.flag.warn{color:var(--warn);border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.08)}
+.tab{display:none}.tab.on{display:block;animation:fade .18s}@keyframes fade{from{transform:translateY(4px)}}
+.seg{display:inline-flex;gap:2px;padding:3px;background:var(--surface);border:1px solid var(--line);border-radius:11px;margin-bottom:16px;flex-wrap:wrap}
+.seg button{background:transparent;color:var(--muted);border:0;padding:6px 14px;border-radius:8px;font-weight:600}.seg button:hover{color:var(--text)}.seg button.on{background:var(--surface2);color:#fff;box-shadow:0 0 0 1px var(--line2)}.seg .n{opacity:.6;font-weight:500;margin-left:5px}
+.empty{padding:32px 16px;text-align:center;color:var(--muted)}.empty b{display:block;color:var(--text);margin-bottom:4px}
+/* switch */
+.sw{position:relative;width:38px;height:22px;flex:none;display:inline-block}.sw input{opacity:0;width:0;height:0;position:absolute}.sw i{position:absolute;inset:0;background:var(--line2);border-radius:99px;transition:.15s;cursor:pointer}.sw i:before{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.15s}.sw input:checked+i{background:var(--accent)}.sw input:checked+i:before{transform:translateX(16px)}
+/* meters + charts */
+.meter{height:6px;background:var(--surface2);border-radius:99px;overflow:hidden;min-width:70px}.meter i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#7c6cff,#c084fc)}
+.mrow{display:grid;grid-template-columns:1fr 90px 34px;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.mrow:last-child{border-bottom:0}.mrow .nm{font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bars{display:flex;align-items:flex-end;gap:6px;height:150px;padding-top:8px;border-bottom:1px solid var(--line)}.bars .b{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:4px;position:relative}
+.bars .b i{display:block;width:100%;max-width:34px;background:linear-gradient(180deg,#9b8cff,#6657e6);border-radius:6px 6px 2px 2px;min-height:3px;transition:.15s}.bars .b:hover i{filter:brightness(1.25)}.bars .b em{font-style:normal;font-size:11px;color:var(--muted)}
+.xl{display:flex;gap:6px;margin-top:6px}.xl span{flex:1;text-align:center;font-size:10.5px;color:#62627a}
+.hb{display:grid;grid-template-columns:130px 1fr 52px;gap:12px;align-items:center;padding:6px 0;font-size:13px}.hb .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.rank:last-child{border-bottom:0}.rank .n{width:24px;height:24px;border-radius:7px;background:var(--surface2);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--muted);flex:none}
+.rank .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:550}.rank .v{font-weight:650}
+/* review */
+.job{display:grid;grid-template-columns:170px 1fr;gap:18px}.job video{width:170px;aspect-ratio:9/16;object-fit:cover;border-radius:12px;background:#000;border:1px solid var(--line)}@media(max-width:640px){.job{grid-template-columns:1fr}.job video{width:100%;max-width:220px}}
+.q{display:grid;grid-template-columns:62px 1fr auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}.q:last-child{border-bottom:0}.q video{width:62px;aspect-ratio:9/16;object-fit:cover;border-radius:8px;background:#000}.q .t{font-weight:600;margin-bottom:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.q .b{display:flex;gap:6px}
+.scriptbox{border:1px solid var(--line2);border-radius:12px;padding:16px;margin:16px 0 0;background:var(--bg)}.scriptbox h3{margin:2px 0 4px;font-size:17px}.scriptbox ol{margin:12px 0;padding-left:22px}.scriptbox li{margin:0 0 10px}.scriptbox .vis{font-size:12px}.scriptbox .acts,.acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}.scriptbox .gem{border:1px dashed var(--line2);border-radius:10px;padding:12px;margin:12px 0}.scriptbox .gem textarea{width:100%;font-size:12px}
+.hero{display:flex;align-items:center;gap:16px;padding:20px;border-radius:var(--r);margin-bottom:16px;border:1px solid var(--line);background:radial-gradient(900px 200px at 0% 0%,rgba(124,108,255,.22),transparent),var(--surface)}
+.hero h2{font-size:18px}.hero p{margin:3px 0 0;color:var(--muted)}.hero .sp{flex:1}
+.stepper{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);margin-bottom:14px}.stepper b{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--accent-soft);color:#c7bfff;font-size:11px}
+.log{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;max-height:260px;overflow:auto}
+.tile{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);cursor:pointer;transition:.15s}.tile:hover{border-color:var(--accent)}.tile .c{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);display:flex;gap:6px;align-items:center}.tile .h{font-weight:650;margin:4px 0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tile .t{font-size:12.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hl-tag{display:inline-flex;align-items:center;gap:6px;font-weight:650;font-size:13px;padding:3px 11px;border-radius:99px;background:var(--accent-soft);color:#c7bfff;border:1px solid rgba(124,108,255,.35)}
+.idea{margin-bottom:14px}.idea h3{font-size:17px;margin:10px 0 2px}.idea .hook{color:var(--muted);font-style:italic;margin:2px 0 10px}.idea details{margin:8px 0}.idea summary{cursor:pointer;color:#a99fff;font-weight:600;font-size:13px}.idea ol{margin:8px 0 0;padding-left:22px}.idea li{margin:0 0 8px}.idea .vis{font-size:12px;color:var(--muted)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.tags a{font-size:12.5px;padding:2px 10px;border-radius:99px;background:var(--surface2);border:1px solid var(--line2);color:var(--text)}.tags a:hover{border-color:var(--accent);text-decoration:none}
+@media(max-width:860px){.shell{grid-template-columns:1fr}aside{position:static;height:auto;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;padding:10px;border-right:0;border-bottom:1px solid var(--line)}.brand,.grp,.side-foot{display:none}.nav{width:auto;white-space:nowrap}main{padding:0 16px 40px}.top{position:static}.hb{grid-template-columns:90px 1fr 44px}}
 </style></head><body>
-<h1>AI Content Factory</h1>
-<div class="muted" id="sys">Checking system…</div>
-<nav id="nav"></nav>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
+<symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 14h.01M15 14h.01M2 14h2M20 14h2"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 20h16"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+<symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></symbol>
+</defs></svg>
+<div class="shell">
+<aside>
+ <div class="brand"><div class="logo"><svg class="i" style="width:17px;height:17px"><use href="#i-bolt"/></svg></div>Content Factory</div>
+ <div id="nav"></div>
+ <div class="side-foot"><div class="t">System</div><div id="sys"><span class="muted">Checking…</span></div></div>
+</aside>
+<main>
+<div class="top"><div><h1 id="pgT">Dashboard</h1><div class="sub" id="pgS"></div></div><div class="sp"></div>
+ <div class="apchip" id="apChip" onclick="show('auto')" title="Open Autopilot"><span class="dot" id="apDot"></span><span id="apTxt">Autopilot</span></div>
+ <button onclick="show('create')"><svg class="i" style="vertical-align:-3px;margin-right:6px"><use href="#i-plus"/></svg>New video</button></div>
 
-<section class="tab" id="t-create"><div class="card"><h2>Create a video</h2>
+<section class="tab" id="t-dash">
+ <div class="g g3" id="dActs"></div>
+ <div class="g g4" id="dKpis"></div>
+ <div class="card"><div class="ch"><h2>Today's ideas</h2><span class="muted" id="dIdMeta" style="font-size:12px"></span><span class="sp"></span><a class="lnk" onclick="show('ideas')">Open all →</a></div><div class="grid" id="dIdeas"></div></div>
+ <div class="g g2">
+  <div class="card"><div class="ch"><h2>Review queue</h2><span class="sp"></span><a class="lnk" onclick="show('jobs')">View all →</a></div><div id="dQueue"></div></div>
+  <div class="card"><div class="ch"><h2>Autopilot</h2><span class="sp"></span><a class="lnk" onclick="show('auto')">Settings →</a></div><div id="dAuto"></div></div>
+ </div>
+ <div class="g g2">
+  <div class="card"><div class="ch"><h2>Videos made · last 14 days</h2></div><div id="dChart"></div></div>
+  <div class="card"><div class="ch"><h2>Top performing</h2><span class="sp"></span><a class="lnk" onclick="show('stats')">Analytics →</a></div><div id="dTop"></div></div>
+ </div>
+ <div class="g g2">
+  <div class="card"><div class="ch"><h2>Trending today</h2><span class="muted" id="dTrMeta" style="font-size:12px"></span><span class="sp"></span><a class="lnk" onclick="refreshTrending(this)">↻ Refresh</a></div><div id="dTrend"></div></div>
+  <div class="card"><div class="ch"><h2>Ready to post</h2><span class="sp"></span><a class="lnk" onclick="show('download')">Add videos →</a></div><div id="dReady"></div></div>
+ </div>
+ <div class="g g2e">
+  <div class="card"><div class="ch"><h2>Niche opportunities</h2><span class="sp"></span><a class="lnk" onclick="show('niche')">Explore →</a></div><div id="dNiche"></div></div>
+  <div class="card"><div class="ch"><h2>AI video engine</h2></div><div id="dSys"></div></div>
+ </div>
+</section>
+
+<section class="tab" id="t-ideas">
+ <div class="hero"><div><h2 id="idHot">Today's ideas</h2><p id="idMeta" class="muted"></p></div><span class="sp"></span><button id="idBtn" onclick="refreshIdeas()">↻ Generate today's ideas</button></div>
+ <div class="seg" id="idSeg"></div><div id="idBody"></div>
+</section>
+
+<section class="tab" id="t-create"><div class="card"><div class="stepper"><b>1</b> Write script <span>→</span> <b>2</b> Approve &amp; render <span>→</span> <b>3</b> Review &amp; publish</div>
 <div class="row"><label>Series<select id="series"></select></label>
-<label>Duration (s)<input id="duration" type="number" min="15" max="180" step="1" value="30" list="durPresets" style="width:90px"><datalist id="durPresets"><option value="20"><option value="30"><option value="45"><option value="60"><option value="90"><option value="120"><option value="180"></datalist></label>
+<label>Duration (s)<input id="duration" type="number" min="15" max="180" step="1" value="30" list="durPresets" style="width:96px"><datalist id="durPresets"><option value="20"><option value="30"><option value="45"><option value="60"><option value="90"><option value="120"><option value="180"></datalist></label>
 <label>Language<select id="language"><option>English</option><option>Hindi</option><option>Tamil</option></select></label></div>
-<p><label class="muted">Topic (optional — the AI picks one if empty)<br><input id="topic" style="width:min(100%,560px)" placeholder="e.g. why the sky is blue"></label></p>
-<p class="row"><label class="chk muted"><input type="checkbox" id="aiVideo"> AI video clips</label> <label>Engine<select id="aiProvider"><option value="ltx">LTX-Video — free, local GPU (~1 min per scene)</option><option value="kling" id="klOpt">Kling — paid API (best quality)</option><option value="apiframe" id="afOpt">Apiframe — API credits (Seedance, Kling, Veo…)</option><option value="gemini">Gemini — free, 1 scene: you make the clip in Gemini and upload it</option></select></label></p><div class="row" id="modeRow" style="margin:6px 0"><span class="muted">Generate each scene from:</span>
+<p><label class="muted" style="font-size:12.5px;font-weight:550">Topic (optional — the AI picks one if empty)<br><input id="topic" style="width:min(100%,560px);margin-top:5px" placeholder="e.g. why the sky is blue"></label></p>
+<p class="row"><label class="chk"><input type="checkbox" id="aiVideo"> AI video clips</label> <label>Engine<select id="aiProvider"><option value="ltx">LTX-Video — free, local GPU (~1 min per scene)</option><option value="kling" id="klOpt">Kling — paid API (best quality)</option><option value="apiframe" id="afOpt">Apiframe — API credits (Seedance, Kling, Veo…)</option><option value="gemini">Gemini — free, 1 scene: you make the clip in Gemini and upload it</option></select></label></p><div class="row" id="modeRow" style="margin:6px 0"><span class="muted">Generate each scene from:</span>
 <label class="chk"><input type="radio" name="aiMode" value="t2v" checked> <b>Script → video</b> <span class="muted">(the scene text alone)</span></label>
 <label class="chk"><input type="radio" name="aiMode" value="i2v"> <b>Image → video</b> <span class="muted">(animates a matching photo)</span></label></div>
-<div class="muted" id="aiNote" style="margin:-6px 0 10px">Each scene falls back automatically: Kling → LTX → stock footage → drawn animation.</div>
+<div class="muted" id="aiNote" style="margin:4px 0 14px;font-size:13px">Each scene falls back automatically: Kling → LTX → stock footage → drawn animation.</div>
 <button id="goBtn" onclick="createNow()">1 · Write script</button> <span class="muted" id="msg"></span>
 <div id="scriptBox" class="scriptbox" hidden></div>
-<p class="muted">Step 1 writes the script so you can read it first; step 2 renders the video only after you approve it. Each finished video shows exactly what made it. Nothing is published until you approve the video too.</p></div></section>
+<p class="muted" style="font-size:12.5px;margin-bottom:0">Step 1 writes the script so you can read it first; step 2 renders the video only after you approve it. Each finished video shows exactly what made it. Nothing is published until you approve the video too.</p></div></section>
 
-<section class="tab" id="t-auto"><div class="card"><h2>Autopilot</h2>
-<p class="muted">Every interval it takes ideas from the bank (brainstorming more when empty), writes scripts, renders videos and parks them in <b>Review</b>. It never publishes by itself.</p>
-<div class="row"><label class="chk"><input type="checkbox" id="apOn"> Enabled</label>
+<section class="tab" id="t-auto"><div class="card"><div class="ch"><h2>Autopilot</h2></div>
+<p class="muted" style="margin-top:-4px">Every interval it takes ideas from the bank (brainstorming more when empty), writes scripts, renders videos and parks them in <b>Review</b>. It never publishes by itself.</p>
+<div class="row"><label class="chk"><span class="sw"><input type="checkbox" id="apOn"><i></i></span> Enabled</label>
 <label>Every (hours)<input id="apInt" type="number" min="0.25" step="0.25" style="width:100px"></label>
 <label>Videos per run<input id="apN" type="number" min="1" max="20" style="width:100px"></label>
 <label>Length (s)<input id="apDur" type="number" min="15" max="180" list="durPresets" style="width:90px"></label>
@@ -48,44 +163,61 @@ pre{white-space:pre-wrap;margin:0;font-size:12.5px;color:#d6def7}.bar{display:fl
 <label>Engine<select id="apProv"><option value="ltx">LTX (free)</option><option value="kling">Kling (paid)</option><option value="apiframe">Apiframe (credits)</option></select></label>
 <label>Generate from<select id="apMode"><option value="t2v">Script → video</option><option value="i2v">Image → video</option></select></label>
 <label>Pause when review queue ≥<input id="apMax" type="number" min="1" style="width:90px"></label></div>
-<p class="row" id="apSeries"></p>
+<p class="muted" style="margin:16px 0 6px;font-size:12.5px;font-weight:550">Series to produce</p><p class="row" id="apSeries" style="margin-top:0"></p>
 <button onclick="saveAuto()">Save</button> <button class="alt" onclick="runNow()">Run a batch now</button> <span class="muted" id="apMsg"></span></div>
-<div class="card"><h2>Status</h2><div id="apState" class="muted"></div><pre id="apLog" style="margin-top:8px"></pre></div></section>
+<div class="card"><div class="ch"><h2>Status</h2></div><div id="apState" class="muted"></div><div class="log" style="margin-top:12px"><pre id="apLog"></pre></div></div></section>
 
-<section class="tab" id="t-jobs"><div class="card"><h2>Daily plan</h2>
-<p class="muted">Schedules approved videos on YouTube: <b>2 licensed re-posts + 1 of your own</b> (oldest approved first). Each is uploaded now as private and YouTube publishes it at its time, so your computer can be off then.</p>
+<section class="tab" id="t-jobs"><div class="card"><div class="ch"><h2>Daily plan</h2></div>
+<p class="muted" style="margin-top:-4px">Schedules approved videos on YouTube: <b>2 licensed re-posts + 1 of your own</b> (oldest approved first). Each is uploaded now as private and YouTube publishes it at its time, so your computer can be off then.</p>
 <div class="row"><label>Day<input type="date" id="plDay"></label><label>Re-post 1<input type="time" id="plT1" value="09:00"></label><label>Your own<input type="time" id="plT2" value="14:00"></label><label>Re-post 2<input type="time" id="plT3" value="19:00"></label><button id="plBtn" onclick="planDay()">📅 Schedule the day</button></div>
-<div class="muted" id="plMsg" style="margin-top:6px"></div></div><div class="card row"><label>Show<select id="jobFilter" onchange="loadJobs()"><option value="">All</option><option value="pending_review" selected>Needs review</option><option value="approved">Approved</option><option value="published">Published</option><option value="failed">Failed</option><option value="rejected">Rejected</option></select></label>
-<button class="ghost" onclick="loadJobs()">Refresh</button><span class="muted">Stock footage courtesy of <a href="https://pixabay.com" target="_blank" rel="noopener">Pixabay</a></span></div><div id="jobs"></div></section>
+<div class="muted" id="plMsg" style="margin-top:8px"></div>
+<div class="row" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line)"><label class="chk"><span class="sw"><input type="checkbox" id="asOn"><i></i></span> Auto-schedule every day</label>
+<label>Slots (24 h, comma separated)<input id="asTimes" value="09:00,14:00,19:00" style="width:220px"></label><button class="alt" onclick="saveSched()">Save</button><span class="muted" id="asMsg"></span></div>
+<p class="muted" style="font-size:12.5px;margin:8px 0 0">When on, the app schedules tomorrow's slots on YouTube from your approved (ready) videos, once a day. The app must be running.</p></div>
+<select id="jobFilter" hidden><option value="">All</option><option value="pending_review" selected>Needs review</option><option value="approved">Approved</option><option value="published">Published</option><option value="failed">Failed</option><option value="rejected">Rejected</option></select>
+<div class="seg" id="jobSeg"></div> <span class="muted" style="font-size:12px;margin-left:8px">Stock footage courtesy of <a href="https://pixabay.com" target="_blank" rel="noopener">Pixabay</a></span>
+<div id="jobs"></div></section>
 
-<section class="tab" id="t-stats"><div class="card row"><button onclick="refreshStats()" id="stBtn">Refresh platform stats</button><span class="muted" id="stMsg"></span></div>
-<div class="grid" id="stCards"></div>
-<div class="card"><h2>By series</h2><table id="stSeries"></table></div>
-<div class="card"><h2>Videos made, last 14 days</h2><div class="bar" id="stDaily"></div></div>
-<div class="card"><h2>Top videos</h2><table id="stTop"></table></div></section>
+<section class="tab" id="t-stats"><div class="row" style="margin-bottom:16px"><button onclick="refreshStats()" id="stBtn" class="alt">↻ Refresh platform stats</button><span class="muted" id="stMsg"></span></div>
+<div class="g g4" id="stCards"></div>
+<div class="g g2"><div class="card"><div class="ch"><h2>Videos made · last 14 days</h2></div><div id="stDaily"></div></div>
+<div class="card"><div class="ch"><h2>Views by series</h2></div><div id="stViews"></div></div></div>
+<div class="card"><div class="ch"><h2>By series</h2></div><div class="tw"><table id="stSeries"></table></div></div>
+<div class="card"><div class="ch"><h2>Top videos</h2></div><div class="tw"><table id="stTop"></table></div></div></section>
 
-<section class="tab" id="t-niche"><div class="card"><h2>Find a niche</h2>
-<p class="muted">Looks at what short videos got the most views on YouTube in the last weeks, and whether <b>small channels</b> are winning there (proof a new channel can too). Uses your Google project's read-only YouTube access.</p>
+<section class="tab" id="t-niche"><div class="card"><div class="ch"><h2>Find a niche</h2></div>
+<p class="muted" style="margin-top:-4px">Looks at what short videos got the most views on YouTube in the last weeks, and whether <b>small channels</b> are winning there (proof a new channel can too). Uses your Google project's read-only YouTube access.</p>
 <div class="row"><label>Topics to check (comma separated — empty = broad scan)<input id="nKw" style="width:min(100%,520px)" placeholder="e.g. ai tools, space facts, budget travel"></label>
 <label>Region<input id="nReg" value="IN" maxlength="2" style="width:70px"></label><label>Last (days)<input id="nDays" type="number" value="30" style="width:80px"></label>
-<button id="nBtn" onclick="nicheResearch()">Research YouTube</button></div><div class="muted" id="nMsg" style="margin-top:8px"></div></div>
-<div class="card" id="nRes" style="display:none"><h2>What's working</h2><table id="nTable"></table></div>
-<div class="card" id="nPropCard" style="display:none"><h2>Niches the AI recommends</h2>
-<label class="muted">About you / constraints (optional)<textarea id="nProfile" rows="2" style="width:100%" placeholder="e.g. I speak Tamil and English, faceless channel, want evergreen topics"></textarea></label>
-<p><button onclick="nicheProposals()" id="nPBtn">Suggest niches with AI</button></p><div class="grid" id="nProps"></div></div></section>
+<button id="nBtn" onclick="nicheResearch()">Research YouTube</button></div><div class="muted" id="nMsg" style="margin-top:10px"></div></div>
+<div class="card" id="nRes" style="display:none"><div class="ch"><h2>What's working</h2></div><div class="tw"><table id="nTable"></table></div></div>
+<div class="card" id="nPropCard" style="display:none"><div class="ch"><h2>Niches the AI recommends</h2></div>
+<label class="muted" style="font-size:12.5px;font-weight:550">About you / constraints (optional)<textarea id="nProfile" rows="2" style="width:100%;margin-top:5px" placeholder="e.g. I speak Tamil and English, faceless channel, want evergreen topics"></textarea></label>
+<p><button onclick="nicheProposals()" id="nPBtn">✨ Suggest niches with AI</button></p><div class="grid" id="nProps"></div></div></section>
 
-<section class="tab" id="t-download"><div class="card"><h2>Download an Instagram video</h2>
-<p class="muted">Paste the link of a post or reel from a <b>public</b> account. Use downloads for reference, research or content you own or have permission to use — re-posting someone else's video without permission can break Instagram's terms and copyright.</p>
-<div class="row"><label style="flex:1">Post or reel link<input id="dlUrl" style="width:100%;box-sizing:border-box" placeholder="https://www.instagram.com/reel/…"></label><button id="dlBtn" onclick="downloadIg()">⬇ Download</button></div>
-<p class="muted" id="dlMsg"></p></div>
-<div class="card"><h2>Downloaded</h2><div id="dlList" class="muted">Nothing yet.</div></div></section>
+<section class="tab" id="t-download"><div class="card"><div class="ch"><h2>Download an Instagram video</h2></div>
+<p class="muted" style="margin-top:-4px">Paste the link of a post or reel from a <b>public</b> account. Use downloads for reference, research or content you own or have permission to use — re-posting someone else's video without permission can break Instagram's terms and copyright.</p>
+<div class="row"><label style="flex:1;min-width:260px">Post or reel link<input id="dlUrl" style="width:100%" placeholder="https://www.instagram.com/reel/…"></label><button id="dlBtn" onclick="downloadIg()">⬇ Download</button></div>
+<p class="muted" id="dlMsg" style="margin-bottom:0"></p></div>
+<div class="card"><div class="ch"><h2>Batch · many links → ready to post</h2></div>
+<p class="muted" style="margin-top:-4px">One public post or reel link per line. Each is downloaded and, once you confirm the creators agreed to the re-post, marked <b>ready</b> so the daily plan publishes it to YouTube on schedule (with credit). Without the confirmation the videos are only downloaded.</p>
+<textarea id="bUrls" rows="5" style="width:100%" placeholder="https://www.instagram.com/reel/…&#10;https://www.instagram.com/p/…"></textarea>
+<div class="row" style="margin-top:10px"><label>How did they agree?<select id="bHow"><option>Instagram DM</option><option>Instagram comment</option><option>Email</option><option>Other</option></select></label><label>Date<input type="date" id="bDate"></label><label style="flex:1;min-width:200px">Proof (where it is recorded)<input id="bProof" style="width:100%" placeholder="e.g. DM screenshots folder, 14 Oct"></label></div>
+<p><label class="chk"><input type="checkbox" id="bOk"> Every creator in this list agreed that I can re-post their video on YouTube</label></p>
+<button id="bBtn" onclick="batchGo()">⬇ Fetch all &amp; mark ready</button> <span class="muted" id="bMsg"></span>
+<div id="bList" style="margin-top:12px"></div>
+<p class="muted" style="font-size:12px;margin-bottom:0">API: <code>POST /downloads/batch</code> with <code>{"urls":[…],"permission":{"how":"Instagram DM","date":"2026-10-14","proof":"…"}}</code>, then poll <code>GET /downloads/batch/{id}</code>.</p></div>
+<div class="card"><div class="ch"><h2>Downloaded</h2></div><div id="dlList" class="muted">Nothing yet.</div></div></section>
+</main></div>
 
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function api(url,method='GET',body){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});let d;try{d=await r.json()}catch{d={}}if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:JSON.stringify(d.detail||d));return d}
-let SERIES=[],KL=null,AF=null;const TABS=[['create','Create'],['auto','Autopilot'],['jobs','Review'],['stats','Analytics'],['niche','Niche'],['download','Download']];
-$('nav').innerHTML=TABS.map(([k,l])=>`<button id="b-${k}" onclick="show('${k}')">${l}</button>`).join('');
+let SERIES=[],KL=null,AF=null,HEALTH=null;
+const TABS=[['dash','Dashboard','grid','Overview','Production, review queue and performance at a glance'],['ideas','Daily ideas','bolt','Produce','Fresh scene scripts, topics and Instagram hashtags every day'],['create','Create','plus','Produce','Write a script, approve it, then render the video'],['auto','Autopilot','bot','Produce','Scheduled batches that keep your review queue full'],['download','Download','down','Produce','Save public Instagram videos for reference, or re-post with permission'],['jobs','Review','check','Manage','Approve, schedule and publish finished videos'],['stats','Analytics','chart','Manage','Output and per-video performance'],['niche','Niche','compass','Manage','Find topics where small channels are winning']];
+const ic=n=>`<svg class="i"><use href="#i-${n}"/></svg>`;
+let _g='';$('nav').innerHTML=TABS.map(([k,l,i,g])=>{const h=g!==_g?`<div class="grp">${g}</div>`:'';_g=g;return h+`<button class="nav" id="b-${k}" onclick="show('${k}')">${ic(i)}${l}${k==='jobs'?'<span class="badge" id="revBadge" hidden>0</span>':''}${k==='auto'?'<span class="dot" id="navDot"></span>':''}</button>`}).join('');
 function flagsFor(j){const p=j.provenance,sc=j.script_json||{},f=[],fl=(c,t,tip)=>`<span class="flag ${c}" title="${esc(tip||'')}">${t}</span>`;
  const src=(sc.script_source||'').split(':'),sp=(p&&p.script&&p.script.provider)?p.script:{provider:sc.script_provider||src[0]||null,model:sc.script_model||src.slice(1).join(':')||null,fell_back_from:sc.script_fell_back_from};
  if(sp.provider){const m=(sp.model||'').split('/').pop();f.push(fl('llm',`✍ ${esc(sp.provider)}${m?' · '+esc(m):''}`,'Script written by'));
@@ -110,14 +242,15 @@ function syncMode(){const eng=$('aiProvider').value,kl=eng!=='ltx',m=document.qu
 function seriesHint(){const s=SERIES.find(x=>x.id===$('series').value);if(s&&s.ai_default){$('aiVideo').checked=true;$('duration').value=18;$('aiNote').dataset.hint='This is a visual-first format: one continuous AI shot (a fast-motion 10 s clip slowed to natural speed), so 15-18 s is the sweet spot. Stock footage will only loosely match.'}else delete $('aiNote').dataset.hint;syncMode()}
 function pickEngine(){const kl=$('aiProvider').value!=='ltx';if($('aiProvider').value==='gemini'){$('aiVideo').checked=true;$('duration').value=15}document.querySelector(`input[name=aiMode][value=${kl?'t2v':'i2v'}]`).checked=true;syncMode()}   // sensible default per engine; the user can still change it
 try{const t=new Date(Date.now()+864e5);document.addEventListener('DOMContentLoaded',()=>{const d=$('plDay');if(d&&!d.value)d.value=t.toISOString().slice(0,10)})}catch{}
-function show(k){TABS.forEach(([t])=>{$('t-'+t).classList.toggle('on',t===k);$('b-'+t).classList.toggle('on',t===k)});location.hash=k;
- ({auto:loadAuto,jobs:loadJobs,stats:loadStats,niche:loadNiche,download:loadDownloads})[k]?.()}
-setInterval(()=>{if($('t-auto').classList.contains('on'))loadAuto(true)},4000);
+function show(k){if(!TABS.some(t=>t[0]===k))k='dash';TABS.forEach(([t,l,,,s])=>{$('t-'+t).classList.toggle('on',t===k);$('b-'+t).classList.toggle('on',t===k);if(t===k){$('pgT').textContent=l;$('pgS').textContent=s}});location.hash=k;
+ ({dash:loadDash,ideas:loadIdeas,auto:loadAuto,jobs:()=>{loadJobs();loadSched()},stats:loadStats,niche:loadNiche,download:loadDownloads})[k]?.()}
+const reload=()=>{const on=TABS.find(t=>$('t-'+t[0]).classList.contains('on'));on&&on[0]==='dash'?loadDash():loadJobs();refreshBadge()};
+setInterval(async()=>{try{if($('t-auto').classList.contains('on'))return loadAuto(true);const s=await api('/autopilot');paintAp(s);if($('t-dash').classList.contains('on'))dashAuto(s)}catch{}},4000);
 
 async function init(){
- try{const h=await api('/health');const l=h.llm;$('sys').innerHTML=`LLM: <b>${esc(l.provider)}${l.model?' · '+esc(l.model):''}</b> ${l.ready?'':'<span style="color:var(--bad)">(no model — run <code>ollama pull qwen2.5:7b</code>)</span>'} · ffmpeg ${h.ffmpeg?'✓':'✗'} · AI video: LTX ${h.ai_video.ready?'✓':'✗'} · Kling ${h.kling.ready?'✓':'✗'} · Apiframe ${h.apiframe.ready?'✓':'✗'} · stock footage ${h.stock_footage?'✓':'✗'}`}catch(e){$('sys').textContent=e.message}
+ try{HEALTH=await api('/health');renderSys(HEALTH)}catch(e){$('sys').textContent=e.message}
  try{const h=await api('/health');KL=h.kling;AF=h.apiframe}catch{};$('klOpt').textContent=KL&&KL.ready?`Kling — paid (${KL.model} ${KL.quality}, max ${KL.max_clips_per_video} clips/video, ${KL.clips_today}/${KL.daily_clip_limit} today)`:'Kling — not configured (add keys to .env)';$('afOpt').textContent=AF&&AF.ready?`Apiframe — credits (${AF.model} ${AF.resolution}, max ${AF.max_clips_per_video} clips/video, ${AF.clips_today}/${AF.daily_clip_limit} today)`:AF&&AF.configured?`Apiframe — unsupported model ${AF.model} (use seedance-* or kling-*)`:'Apiframe — not configured (add APIFRAME_API_KEY to .env)';SERIES=await api('/series');const opts=SERIES.map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join('');$('series').innerHTML=opts;$('series').onchange=seriesHint;seriesHint();$('aiProvider').onchange=pickEngine;document.querySelectorAll('input[name=aiMode]').forEach(r=>r.onchange=syncMode);pickEngine();
- show(location.hash.slice(1)||'create')}
+ refreshBadge();api('/autopilot').then(paintAp).catch(()=>{});show(location.hash.slice(1)||'dash')}
 
 let DRAFT=null,SEEN=[];   // SEEN: titles already shown this session, so 'Next prompt' always brings a new idea
    // the script waiting for approval: {id, script}
@@ -129,7 +262,7 @@ async function createNow(){const b=$('goBtn'),m=$('msg');b.disabled=true;try{
  DRAFT={id:j.id,script:j.script};SEEN.push(j.script.title);showDraft();m.textContent='Script ready — read it below, then approve to render.'}catch(e){m.textContent=e.message}b.disabled=false}
 function showDraft(){const s=DRAFT.script,sc=s.scenes||[],words=sc.reduce((n,x)=>n+x.narration.split(/\s+/).length,0);
  const eng=s.ai_video?`AI clips: ${esc(s.ai_provider)} · ${s.ai_mode==='i2v'?'image→video':'script→video'}`:'No AI clips (stock footage / drawn animation)';
- $('scriptBox').innerHTML=`<div class="muted" style="font-size:12px">STEP 2 · REVIEW THE SCRIPT</div><h3>${esc(s.title)}</h3><div class="muted">${esc(s.description||'')}</div>
+ $('scriptBox').innerHTML=`<div class="muted" style="font-size:12px">STEP 2 · REVIEW THE SCRIPT</div><h3>${esc(s.title)}</h3>${s.highlight?`<div style="margin:4px 0"><span class="hl-tag">${esc(s.highlight)}</span></div>`:''}<div class="muted">${esc(s.description||'')}</div>${(s.ig_search_tags||[]).length?`<div class="tags">${s.ig_search_tags.map(t=>`<a href="https://www.instagram.com/explore/tags/${esc(t)}/" target="_blank" rel="noopener">#${esc(t)}</a>`).join('')}</div>`:''}
   <ol>${sc.map(x=>`<li>${esc(x.narration)}<div class="muted vis">🎬 ${esc(x.visual||'')}</div></li>`).join('')}</ol>
   <div class="muted" style="font-size:12px">${sc.length} scenes · ${words} words · target ${s.duration_seconds}s · ${esc(s.language)} · ${eng}${(s.hashtags||[]).length?' · '+s.hashtags.map(h=>'#'+esc(h)).join(' '):''}</div>
   ${(s.revisions||[]).length?`<div class="muted" style="font-size:12px">✎ Revised: ${s.revisions.map(r=>'“'+esc(r)+'”').join(' → ')}</div>`:''}
@@ -137,7 +270,7 @@ function showDraft(){const s=DRAFT.script,sc=s.scenes||[],words=sc.reduce((n,x)=
   ${s.single_shot?`<div class="gem"><b>Make the clip in Gemini</b> <span class="muted" style="font-size:12px">1) copy the prompt · 2) paste it at gemini.google.com (Video) · 3) download the video · 4) upload it here</span>
    <textarea id="gemPrompt" rows="9" readonly>${esc(s.gemini_prompt||'')}</textarea>
    <div class="acts"><button class="ghost" onclick="copyGem()">⧉ Copy prompt</button><input type="file" id="gemFile" accept="video/*"><button class="ghost" id="gemUp" onclick="uploadGem()">⬆ Upload clip</button><span class="muted" id="gemMsg" style="font-size:12px"></span></div></div>`:''}
-  <div class="acts"><button id="renderBtn" onclick="renderDraft()">2 · Approve &amp; render video</button><button class="ghost" onclick="createNow()" title="A completely different idea with the same settings">↻ Next prompt</button><button class="ghost" onclick="toggleRevise()">✎ Rewrite with instructions</button><button class="ghost" onclick="discardDraft()">✕ Discard</button></div>
+  <div class="acts"><button id="renderBtn" onclick="renderDraft()">2 · Approve &amp; render video</button><button class="ghost" onclick="createNow()" title="A completely different idea with the same settings">↻ Next prompt</button><button class="ghost" onclick="toggleRevise()">✎ Rewrite with instructions</button><button class="ghost" onclick="optimizeDraft(this)" title="Rewrite title, caption and hashtags for YouTube Shorts">✨ Optimize caption &amp; hashtags</button><button class="ghost" onclick="discardDraft()">✕ Discard</button></div>
   <div id="reviseBox" hidden style="margin-top:10px"><textarea id="reviseText" rows="3" maxlength="1000" style="width:100%;box-sizing:border-box" placeholder="e.g. make it funnier, give the robot a name, end with a question, use simpler words"></textarea>
   <div class="acts"><button id="reviseBtn" onclick="reviseDraft()">Apply changes</button><span class="muted" style="font-size:12px">Ctrl/⌘+Enter</span></div></div>`;
  $('reviseText').onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))reviseDraft()};
@@ -190,37 +323,47 @@ async function loadAuto(poll){const s=await api('/autopilot'),c=s.config;
   $('apSeries').innerHTML=SERIES.map(x=>`<label class="chk"><input type="checkbox" class="apS" value="${x.id}" ${c.series.includes(x.id)?'checked':''}> ${esc(x.label.split(' — ')[0])}</label>`).join('')}
  const when=t=>t?new Date(t).toLocaleString():'—';
  $('apState').innerHTML=`${s.current?`<b>Working on:</b> ${esc(s.current)}`:'Idle'} · queued tasks: ${s.queued} · last run: ${when(s.last_run)} · next run: ${c.enabled?when(s.next_run)||'soon':'(autopilot off)'}`;
- $('apLog').textContent=s.log.join('\n')||'No activity yet.'}
+ $('apLog').textContent=s.log.join('\n')||'No activity yet.';paintAp(s)}
 async function saveAuto(){const series=[...document.querySelectorAll('.apS:checked')].map(x=>x.value);try{await api('/autopilot','POST',{enabled:$('apOn').checked,interval_hours:+$('apInt').value,per_run:+$('apN').value,duration:+$('apDur').value,max_pending:+$('apMax').value,ai_video:$('apAI').checked,ai_provider:$('apProv').value,ai_mode:$('apMode').value,series});$('apMsg').textContent='Saved.';loadAuto()}catch(e){$('apMsg').textContent=e.message}}
 async function runNow(){try{await saveAuto();await api('/autopilot/run','POST');$('apMsg').textContent='Batch queued.';loadAuto(true)}catch(e){$('apMsg').textContent=e.message}}
 
-async function loadJobs(){const f=$('jobFilter').value;let jobs=await api('/jobs');if(f==='failed')jobs=jobs.filter(j=>/failed/.test(j.status));else if(f)jobs=jobs.filter(j=>j.status===f);
+const JSEG=[['pending_review','Needs review'],['approved','Approved'],['published','Published'],['failed','Failed'],['rejected','Rejected'],['','All']];
+const jobGroup=j=>/failed/.test(j.status)?'failed':j.status;
+async function loadJobs(){const f=$('jobFilter').value,all=await api('/jobs');
+ const cnt=k=>k===''?all.length:all.filter(j=>jobGroup(j)===k).length;
+ $('jobSeg').innerHTML=JSEG.map(([k,l])=>`<button class="${k===f?'on':''}" onclick="$('jobFilter').value='${k}';loadJobs()">${l}<span class="n">${cnt(k)}</span></button>`).join('');
+ setBadge(cnt('pending_review'));
+ const jobs=f?all.filter(j=>jobGroup(j)===f):all;
  const label=Object.fromEntries(SERIES.map(s=>[s.id,s.label.split(' — ')[0]]));
  $('jobs').innerHTML=jobs.map(j=>`<div class="card job"><div>${j.video_path?`<video controls playsinline preload="none" src="/video/${j.id}"></video>`:''}</div><div>
-  <span class="pill ${j.status}">${j.status==='published'&&j.publish_at&&new Date(j.publish_at)>new Date()?'scheduled':j.status}</span>${j.publish_at?`<span class="pill">📅 ${new Date(j.publish_at).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}</span>`:''}${j.youtube_id?`<a class="pill" href="https://youtube.com/shorts/${esc(j.youtube_id)}" target="_blank" rel="noopener">▶ YouTube</a>`:''}<span class="pill">${esc(label[j.series]||j.series||'')}</span>${j.source!=='manual'?`<span class="pill">${esc(j.source)}</span>`:''}
-  <h3 style="margin:6px 0">${esc(j.title||j.id)}</h3><div class="muted">${esc(j.description||'')}</div>${flagsFor(j)}<div class="muted" style="font-size:12px">${j.id} · ${new Date(j.created_at).toLocaleString()}${j.script_json&&j.script_json.script_source?' · script: '+esc(j.script_json.script_source):''}</div>
-  <div class="row" style="margin-top:8px">${j.status==='pending_review'?`<button onclick="act('/approve/${j.id}')">Approve</button><button class="bad" onclick="act('/reject/${j.id}')">Reject</button>`:''}${j.status==='approved'||j.status==='publish_failed'?`<button onclick="act('/publish/${j.id}/youtube')">Publish to YouTube now</button><input type="datetime-local" id="at-${j.id}"><button class="ghost" onclick="schedule('${j.id}')">📅 Schedule</button><button class="alt" onclick="act('/publish/${j.id}/instagram')">Publish to Instagram</button>`:''}${['script_ready','render_failed','failed'].includes(j.status)?`<button onclick="act('/render/${j.id}')">Render / retry</button>`:''}</div>
-  ${j.error?`<pre style="margin-top:8px;color:var(--bad)">${esc(j.error)}</pre>`:''}</div></div>`).join('')||'<p class="muted">Nothing here.</p>'}
+  <span class="pill ${j.status}">${j.status==='published'&&j.publish_at&&new Date(j.publish_at)>new Date()?'scheduled':j.status.replace(/_/g,' ')}</span>${j.publish_at?`<span class="pill">📅 ${new Date(j.publish_at).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}</span>`:''}${j.youtube_id?`<a class="pill" href="https://youtube.com/shorts/${esc(j.youtube_id)}" target="_blank" rel="noopener">▶ YouTube</a>`:''}<span class="pill">${esc(label[j.series]||j.series||'')}</span>${j.source!=='manual'?`<span class="pill">${esc(j.source)}</span>`:''}
+  <h3 style="margin:6px 0;font-size:16px">${esc(j.title||j.id)}</h3><div class="muted">${esc(j.description||'')}</div>${(j.hashtags||[]).length?`<div class="tags">${j.hashtags.map(t=>`<span class="flag">#${esc(t)}</span>`).join('')}${j.script_json&&j.script_json.seo?'<span class="flag gm" title="Title, caption and hashtags were rewritten by the LLM for YouTube Shorts">✨ optimized</span>':''}</div>`:''}${flagsFor(j)}<div class="muted" style="font-size:12px;margin-top:4px">${j.id} · ${new Date(j.created_at).toLocaleString()}${j.script_json&&j.script_json.script_source?' · script: '+esc(j.script_json.script_source):''}</div>
+  <div class="row" style="margin-top:12px">${j.status==='pending_review'?`<button onclick="act('/approve/${j.id}')">Approve</button><button class="bad" onclick="act('/reject/${j.id}')">Reject</button>`:''}${j.status==='approved'||j.status==='publish_failed'?`<button onclick="act('/publish/${j.id}/youtube')">Publish to YouTube now</button><input type="datetime-local" id="at-${j.id}"><button class="ghost" onclick="schedule('${j.id}')">📅 Schedule</button><button class="alt" onclick="act('/publish/${j.id}/instagram')">Publish to Instagram</button>`:''}${['script_ready','render_failed','failed'].includes(j.status)?`<button onclick="act('/render/${j.id}')">Render / retry</button>`:''}${['pending_review','approved','publish_failed','render_failed','script_ready'].includes(j.status)?`<button class="ghost" onclick="optimizeJob('${j.id}',this)" title="Rewrite title, caption and hashtags for YouTube Shorts">✨ Optimize caption</button>`:''}</div>
+  ${j.error?`<pre style="margin-top:10px;color:var(--bad)">${esc(j.error)}</pre>`:''}</div></div>`).join('')||'<div class="card empty"><b>Nothing here</b>Videos you create will show up in this list.</div>'}
 async function schedule(id){const v=$('at-'+id).value;if(!v){alert('Pick a date and time first');return}
  try{const d=await api('/publish/'+id+'/youtube','POST',{confirm:true,publish_at:new Date(v).toISOString()});alert('Uploaded — goes public '+new Date(d.publish_at).toLocaleString())}catch(e){alert(e.message)}loadJobs()}
 async function planDay(){const day=$('plDay').value,m=$('plMsg'),b=$('plBtn');if(!day){m.textContent='Pick a day.';return}
  const slots=['plT1','plT2','plT3'].map(t=>new Date(`${day}T${$(t).value}`).toISOString());b.disabled=true;m.textContent='Uploading to YouTube… (a browser window may open the first time to connect your channel)';
  try{const r=await api('/plan/day','POST',{slots});m.innerHTML=r.results.map(x=>`${new Date(x.slot).toLocaleTimeString([], {timeStyle:'short'})} · ${x.kind==='own'?'your own':'re-post'}: ${x.error?'⚠ '+esc(x.error):'✓ scheduled'}`).join('<br>')}catch(e){m.textContent=e.message}b.disabled=false;loadJobs()}
-async function act(url){try{const d=await api(url,'POST',{confirm:true});if(d.url||d.instagram_media_id)alert(JSON.stringify(d,null,2))}catch(e){alert(e.message)}loadJobs()}
+async function act(url){try{const d=await api(url,'POST',{confirm:true});if(d.url||d.instagram_media_id)alert(JSON.stringify(d,null,2))}catch(e){alert(e.message)}reload()}
 
 async function refreshStats(){const b=$('stBtn');b.disabled=true;$('stMsg').textContent='Fetching…';try{const r=await api('/analytics/refresh','POST');$('stMsg').textContent=`YouTube ${r.youtube} · Instagram ${r.instagram}${r.errors.length?' — '+r.errors.join(' | '):''}`}catch(e){$('stMsg').textContent=e.message}b.disabled=false;loadStats()}
 async function loadStats(){const s=await api('/analytics'),st=s.status,n=k=>st[k]||0;
- const card=(v,l)=>`<div class="card"><div class="stat">${v}</div><div class="muted">${l}</div></div>`;
- $('stCards').innerHTML=card(n('pending_review'),'waiting for review')+card(n('approved'),'approved')+card(n('published'),'published')+card(s.totals.v.toLocaleString(),'total views')+card(s.totals.l.toLocaleString(),'likes')+card((n('failed')+n('render_failed')+n('publish_failed')),'failed');
+ const failed=n('failed')+n('render_failed')+n('publish_failed'),pub=n('published');
+ const card=(v,l,i,c)=>`<div class="card kpi ${c||''}"><div class="l"><span class="ico">${ic(i)}</span>${l}</div><div class="v num">${v}</div></div>`;
+ $('stCards').innerHTML=card(nf(s.totals.v),'Total views','eye')+card(nf(s.totals.l),'Likes','bolt','ok')+card(nf(s.totals.c||0),'Comments','chart','info')+card(pub?nf(Math.round(s.totals.v/pub)):'—','Avg views / published','eye')
+  +card(n('pending_review'),'Waiting for review','clock','warn')+card(n('approved'),'Approved','check','info')+card(pub,'Published','send','ok')+card(failed,'Failed','film','warn');
  const lab=Object.fromEntries(SERIES.map(x=>[x.id,x.label.split(' — ')[0]]));
- $('stSeries').innerHTML='<tr><th>Series</th><th>Videos</th><th>By autopilot</th><th>Published</th><th>Failed</th><th>Views</th><th>Avg views</th><th>Likes</th></tr>'+s.per_series.map(r=>`<tr><td>${esc(lab[r.series]||r.series)}</td><td>${r.jobs}</td><td>${r.auto}</td><td>${r.published}</td><td>${r.failed}</td><td>${r.views}</td><td>${r.avg_views}</td><td>${r.likes}</td></tr>`).join('');
- const mx=Math.max(1,...s.daily.map(d=>d.made));$('stDaily').innerHTML=s.daily.map(d=>`<div title="${d.day}: ${d.made}" style="height:${d.made/mx*100}%"></div>`).join('')||'<span class="muted">No videos yet.</span>';
- $('stTop').innerHTML=s.top.length?'<tr><th>Title</th><th>Platform</th><th>Views</th><th>Likes</th><th>Comments</th></tr>'+s.top.map(t=>`<tr><td>${esc(t.title)}</td><td>${t.platform}</td><td>${t.views}</td><td>${t.likes}</td><td>${t.comments}</td></tr>`).join(''):'<tr><td class="muted">Publish videos and press “Refresh platform stats” to see performance here.</td></tr>';
+ $('stSeries').innerHTML='<tr><th>Series</th><th>Videos</th><th>Autopilot</th><th>Published</th><th>Failed</th><th>Views</th><th>Avg views</th><th>Likes</th></tr>'+s.per_series.map(r=>`<tr class="num"><td><b>${esc(lab[r.series]||r.series)}</b></td><td>${r.jobs}</td><td>${r.auto}</td><td>${r.published}</td><td>${r.failed}</td><td>${nf(r.views)}</td><td>${nf(r.avg_views)}</td><td>${nf(r.likes)}</td></tr>`).join('');
+ $('stDaily').innerHTML=bars(s.daily);
+ const mx=Math.max(1,...s.per_series.map(r=>r.views||0));
+ $('stViews').innerHTML=s.per_series.filter(r=>r.views).map(r=>`<div class="hb"><span class="nm">${esc(lab[r.series]||r.series)}</span><div class="meter"><i style="width:${(r.views/mx*100).toFixed(0)}%"></i></div><span class="num">${nf(r.views)}</span></div>`).join('')||'<div class="empty">No views yet.<br>Publish videos, then refresh platform stats.</div>';
+ $('stTop').innerHTML=s.top.length?'<tr><th>Title</th><th>Platform</th><th>Views</th><th>Likes</th><th>Comments</th></tr>'+s.top.map(t=>`<tr class="num"><td>${esc(t.title)}</td><td>${esc(t.platform)}</td><td>${nf(t.views)}</td><td>${nf(t.likes)}</td><td>${nf(t.comments)}</td></tr>`).join(''):'<tr><td class="muted">Publish videos and press “Refresh platform stats” to see performance here.</td></tr>';
  if(s.metrics_updated)$('stMsg').textContent='Stats last updated '+new Date(s.metrics_updated).toLocaleString()}
 async function loadNiche(){const s=await api('/niche');if(s.youtube_data==='none')$('nMsg').textContent='No YouTube access configured — add GOOGLE_APPLICATION_CREDENTIALS to .env.';
  if(s.research)renderNicheRes(s.research);if(s.proposals)renderProps(s.proposals)}
 function renderNicheRes(r){$('nRes').style.display='block';$('nPropCard').style.display='block';
- $('nTable').innerHTML='<tr><th>Topic</th><th>Opportunity</th><th>Median views</th><th>Small channels winning</th><th>Top video</th></tr>'+r.keywords.map(k=>`<tr><td><b>${esc(k.keyword)}</b></td><td>${k.opportunity}</td><td>${k.median_views.toLocaleString()}</td><td>${k.small_channel_wins}/${k.n}</td><td><a href="${esc(k.top[0].url)}" target="_blank" rel="noopener">${esc(k.top[0].title.slice(0,55))}</a> <span class="muted">${k.top[0].views.toLocaleString()}</span></td></tr>`).join('');
+ $('nTable').innerHTML='<tr><th>Topic</th><th style="width:170px">Opportunity</th><th>Median views</th><th>Small channels winning</th><th>Top video</th></tr>'+r.keywords.map(k=>`<tr class="num"><td><b>${esc(k.keyword)}</b></td><td><div style="display:flex;align-items:center;gap:10px"><div class="meter" style="flex:1"><i style="width:${k.opportunity}%"></i></div><b>${k.opportunity}</b></div></td><td>${nf(k.median_views)}</td><td>${k.small_channel_wins}/${k.n}</td><td><a href="${esc(k.top[0].url)}" target="_blank" rel="noopener">${esc(k.top[0].title.slice(0,55))}</a> <span class="muted">${nf(k.top[0].views)}</span></td></tr>`).join('');
  $('nMsg').textContent=`Region ${r.region}, last ${r.days} days · ${new Date(r.generated_at).toLocaleString()} · ~${r.quota_units_used} API quota units`}
 async function nicheResearch(){const b=$('nBtn');b.disabled=true;$('nMsg').textContent='Searching YouTube…';try{const kw=$('nKw').value.split(',').map(x=>x.trim()).filter(Boolean);renderNicheRes(await api('/niche/research','POST',{keywords:kw.length?kw:null,region:$('nReg').value,days:+$('nDays').value}));renderProps([])}catch(e){$('nMsg').textContent=e.message}b.disabled=false}
 function renderProps(p){$('nProps').innerHTML=p.map((x,i)=>`<div class="card"><h3 style="margin:0 0 6px">${esc(x.series_label)}</h3><div class="muted">${esc(x.why||'')}</div><p style="font-size:13px">${(x.first_topics||[]).slice(0,4).map(t=>'• '+esc(t)).join('<br>')}</p>${x.adopted_as?`<button disabled>✓ Added as a series</button>`:`<button id="adopt${i}" onclick="adopt(${i})">Use this niche</button>`}<div class="muted" id="adoptMsg${i}" style="margin-top:6px">${x.adopted_as?'Find it in Create and Autopilot.':''}</div></div>`).join('')}
@@ -229,5 +372,94 @@ async function adopt(i){const b=$('adopt'+i),m=$('adoptMsg'+i);b.disabled=true;b
  try{const r=await api('/niche/adopt','POST',{index:i});SERIES=await api('/series');const o=SERIES.map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join('');$('series').innerHTML=o;
   b.textContent='✓ Added as a series';m.innerHTML=`${r.ideas_added} starter ideas added. Find it in Create and Autopilot.`;apLoaded=false}
  catch(e){b.disabled=false;b.textContent='Use this niche';m.textContent='Failed: '+e.message}}
+/* ---------- dashboard ---------- */
+const nf=n=>Number(n||0).toLocaleString(),fmtWhen=t=>t?new Date(t).toLocaleString([],{dateStyle:'medium',timeStyle:'short'}):'—';
+function spark(vals){if(vals.length<2)return'';const mx=Math.max(1,...vals),w=96,h=36,p=vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${(h-3-v/mx*(h-8)).toFixed(1)}`).join(' ');return `<svg class="spark" viewBox="0 0 ${w} ${h}"><polyline points="${p}" fill="none" stroke="#a99fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
+function bars(daily){if(!daily||!daily.length)return'<div class="empty"><b>No videos yet</b>Create your first one to see output here.</div>';const mx=Math.max(1,...daily.map(d=>d.made));
+ return `<div class="bars">${daily.map(d=>`<div class="b" title="${esc(d.day)}: ${d.made} video(s)"><em>${d.made||''}</em><i style="height:${Math.max(2,d.made/mx*78)}%"></i></div>`).join('')}</div><div class="xl">${daily.map(d=>`<span>${esc(d.day.slice(5))}</span>`).join('')}</div>`}
+function setBadge(n){const b=$('revBadge');if(b){b.textContent=n;b.hidden=!n}}
+async function refreshBadge(){try{setBadge((await api('/jobs')).filter(j=>j.status==='pending_review').length)}catch{}}
+function renderSys(h){const l=h.llm,a=h.ai_video,r=(n,ok,v)=>`<div class="hl"><span class="dot ${ok?'ok':'bad'}"></span>${n}<b title="${esc(v)}">${esc(v)}</b></div>`;
+ $('sys').innerHTML=r('LLM',l.ready,l.ready?(l.model||l.provider):'no model')+r('ffmpeg',h.ffmpeg,h.ffmpeg?'ready':'missing')+r('LTX video',a.ready,a.ready?'ready':a.model_downloaded?'no GPU':'not installed')+r('Kling',h.kling.ready,h.kling.ready?'ready':'off')+r('Apiframe',h.apiframe.ready,h.apiframe.ready?'ready':'off')+r('Stock footage',h.stock_footage,h.stock_footage?'ready':'no key')}
+function paintAp(s){const c=s.config,run=!!s.current;const cls='dot '+(run?'run':c.enabled?'ok':'');
+ $('apDot').className=cls;const nd=$('navDot');if(nd)nd.className=cls;
+ $('apTxt').textContent=run?'Working: '+s.current.slice(0,38):c.enabled?'Autopilot on'+(s.next_run?' · next '+new Date(s.next_run).toLocaleTimeString([],{timeStyle:'short'}):''):'Autopilot off'}
+function dashAuto(s){const c=s.config,run=!!s.current;
+ $('dAuto').innerHTML=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><label class="sw"><input type="checkbox" ${c.enabled?'checked':''} onchange="toggleAp(this.checked)"><i></i></label><div><b>${run?'Working…':c.enabled?'Running on schedule':'Paused'}</b><div class="muted" style="font-size:12.5px">${run?esc(s.current):c.enabled?'Next batch '+fmtWhen(s.next_run):'Turn on to produce videos automatically'}</div></div></div>
+  <div class="hl"><span class="muted">Every</span><b>${c.interval_hours} h</b></div><div class="hl"><span class="muted">Videos per run</span><b>${c.per_run} × ${c.duration}s</b></div><div class="hl"><span class="muted">Visuals</span><b>${c.ai_video?esc(c.ai_provider)+' · '+(c.ai_mode==='t2v'?'script→video':'image→video'):'stock / drawn'}</b></div><div class="hl"><span class="muted">Pauses at</span><b>${c.max_pending} in review</b></div><div class="hl"><span class="muted">Last run</span><b>${fmtWhen(s.last_run)}</b></div>
+  <div class="acts"><button class="sm" onclick="dashRun(this)">▶ Run a batch now</button><button class="sm ghost" onclick="show('auto')">Configure</button></div>
+  ${s.log.length?`<div class="log" style="margin-top:12px;max-height:84px"><pre>${esc(s.log.slice(-3).join('\n'))}</pre></div>`:''}`}
+async function toggleAp(on){try{paintAp(await api('/autopilot','POST',{enabled:on}));loadDash()}catch(e){alert(e.message);loadDash()}}
+async function dashRun(b){b.disabled=true;try{await api('/autopilot/run','POST');dashAuto(await api('/autopilot'))}catch(e){alert(e.message);b.disabled=false}}
+async function loadDash(){
+ const [jobs,s,ap,nc,tr,sc,dly]=await Promise.all([api('/jobs'),api('/analytics'),api('/autopilot'),api('/niche').catch(()=>({})),api('/trending').catch(()=>({})),api('/schedule').catch(()=>null),api('/daily').catch(()=>({}))]);
+ const st=s.status,n=k=>st[k]||0,pend=jobs.filter(j=>j.status==='pending_review'),made=(s.daily||[]).map(d=>d.made),madeSum=made.reduce((a,b)=>a+b,0);
+ setBadge(pend.length);paintAp(ap);
+ $('dActs').innerHTML=[['create','plus','Create a video','Write a script, approve it, render it'],['download','down','Download','Save a public Instagram reel'],['auto','bot','Autopilot',ap.config.enabled?`On · every ${ap.config.interval_hours} h · ${ap.config.per_run} per run`:'Off · set up scheduled batches']]
+  .map(([k,i,t,d])=>`<button class="act" onclick="show('${k}')"><span class="ico">${ic(i)}</span><span><b>${t}</b><span>${d}</span></span></button>`).join('');
+ const kpi=(l,v,sub,i,c,sp)=>`<div class="card kpi ${c||''}"><div class="l"><span class="ico">${ic(i)}</span>${l}</div><div class="v num">${v}</div><div class="s">${sub}</div>${sp||''}</div>`;
+ $('dKpis').innerHTML=kpi('Total views',nf(s.totals.v),`${nf(s.totals.l)} likes`,'eye','info')+kpi('Awaiting review',pend.length,pend.length?'Approve or reject them':'Queue is clear','clock','warn')+kpi('Published',n('published'),`${n('approved')} approved, waiting`,'send','ok')+kpi('Made · 14 days',madeSum,`${n('failed')+n('render_failed')+n('publish_failed')} failed overall`,'film','',spark(made));
+ const label=Object.fromEntries(SERIES.map(x=>[x.id,x.label.split(' — ')[0]]));
+ $('dQueue').innerHTML=pend.slice(0,4).map(j=>`<div class="q"><video muted playsinline preload="metadata" src="/video/${j.id}#t=0.4" onclick="show('jobs')" style="cursor:pointer"></video><div style="min-width:0"><div class="t">${esc(j.title||j.id)}</div><div class="muted" style="font-size:12px">${esc(label[j.series]||j.series||'')} · ${new Date(j.created_at).toLocaleDateString([],{month:'short',day:'numeric'})}</div></div><div class="b"><button class="sm" onclick="act('/approve/${j.id}')">Approve</button><button class="sm bad" onclick="act('/reject/${j.id}')">Reject</button></div></div>`).join('')
+  ||'<div class="empty"><b>Nothing to review</b>New videos from Create and Autopilot land here.</div>';
+ dashAuto(ap);$('dChart').innerHTML=bars(s.daily);dashTrend(tr);dashReady(sc);dashIdeas(dly);
+ $('dTop').innerHTML=s.top.slice(0,5).map((t,i)=>`<div class="rank"><span class="n">${i+1}</span><span class="t" title="${esc(t.title)}">${esc(t.title)}</span><span class="v num">${nf(t.views)}</span></div>`).join('')||'<div class="empty"><b>No stats yet</b>Publish videos, then refresh platform stats in Analytics.</div>';
+ const ks=(nc.research&&nc.research.keywords||[]).slice(0,5);
+ $('dNiche').innerHTML=ks.length?ks.map(k=>`<div class="mrow"><span class="nm">${esc(k.keyword)}<span class="muted" style="font-size:12px"> · ${nf(k.median_views)} median views</span></span><div class="meter"><i style="width:${k.opportunity}%"></i></div><b class="num">${k.opportunity}</b></div>`).join(''):'<div class="empty"><b>No research yet</b>Scan YouTube to see which topics have demand and room for small channels.<div class="acts" style="justify-content:center"><button class="sm" onclick="show(\'niche\')">Find a niche</button></div></div>';
+ const a=(HEALTH&&HEALTH.ai_video)||{},row=(k,ok,v)=>`<div class="hl"><span class="dot ${ok?'ok':'bad'}"></span>${k}<b style="max-width:none">${esc(v)}</b></div>`;
+ $('dSys').innerHTML=HEALTH?`<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><b style="font-size:16px">LTX-Video 2B</b><span class="pill ${a.ready?'published':'pending_review'}" style="margin:0">${a.ready?'ready':'setup needed'}</span></div>
+  ${row('Model weights',a.model_downloaded,a.model_downloaded?'downloaded':'not downloaded')}${row('CUDA GPU',a.cuda,a.cuda?a.vram_gb+' GB VRAM':'not available to Python')}${row('Output',true,`${a.resolution} · ${(a.frames/24).toFixed(1)} s clips`)}${row('Kling (paid)',HEALTH.kling.ready,HEALTH.kling.ready?`${HEALTH.kling.clips_today}/${HEALTH.kling.daily_clip_limit} clips today`:'not configured')}${row('Apiframe',HEALTH.apiframe.ready,HEALTH.apiframe.ready?`${HEALTH.apiframe.clips_today}/${HEALTH.apiframe.daily_clip_limit} clips today`:'not configured')}
+  ${a.ready?'':'<p class="muted" style="font-size:12.5px;margin:10px 0 0">Install PyTorch with CUDA and run <code>python scripts/download_ltx_model.py</code> (~27 GB). Until then scenes use stock footage or drawn animation.</p>'}`:'<div class="muted">Checking…</div>'}
+
+function dashTrend(t){const d=t&&t.data;
+ if(!d){$('dTrMeta').textContent='';$('dTrend').innerHTML=t&&t.available===false?'<div class="empty"><b>YouTube access not configured</b>Add GOOGLE_APPLICATION_CREDENTIALS (or YOUTUBE_API_KEY) to .env to see daily trends.</div>':'<div class="empty"><b>Not fetched yet</b>It fetches automatically once a day. <div class="acts" style="justify-content:center"><button class="sm" onclick="refreshTrending(this)">Fetch now</button></div></div>';return}
+ $('dTrMeta').textContent=`${d.region} · updated ${fmtWhen(d.fetched_at)}`;
+ $('dTrend').innerHTML=`<div class="flags" style="margin:0 0 10px">${d.keywords.slice(0,10).map(k=>`<span class="flag" style="cursor:pointer" title="Use as topic" onclick="useTopic('${esc(k.word).replace(/'/g,'')}')">#${esc(k.word)} <span class="muted">${k.count}</span></span>`).join('')}</div>
+  <div class="muted" style="font-size:12px;margin-bottom:6px">${d.categories.slice(0,4).map(c=>`${esc(c.name)} ${c.count}`).join(' · ')}</div>
+  ${d.videos.slice(0,6).map((v,i)=>`<div class="rank"><span class="n">${i+1}</span><span class="t" title="${esc(v.title)}"><a href="${esc(v.url)}" target="_blank" rel="noopener" style="color:inherit">${esc(v.title)}</a></span><span class="pill" style="margin:0">${esc(v.category)}</span><span class="v num">${nf(v.views)}</span><button class="sm ghost" onclick="useTopic(this.dataset.t)" data-t="${esc(v.title)}">Make video</button></div>`).join('')}`}
+function useTopic(t){show('create');$('topic').value=t;$('topic').focus()}
+async function refreshTrending(el){const old=el.textContent;el.textContent='Fetching…';try{await api('/trending/refresh','POST');loadDash()}catch(e){alert(e.message);el.textContent=old}}
+function dashReady(c){if(!c){$('dReady').innerHTML='<div class="empty">Schedule info unavailable.</div>';return}
+ $('dReady').innerHTML=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div class="v num" style="font-size:30px;font-weight:700">${c.ready}</div><div><b>videos ready</b><div class="muted" style="font-size:12.5px">approved, not yet on YouTube</div></div></div>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><label class="sw"><input type="checkbox" ${c.enabled?'checked':''} onchange="toggleSched(this.checked,'${c.times.join(',')}')"><i></i></label><div><b>Auto-schedule ${c.enabled?'on':'off'}</b><div class="muted" style="font-size:12.5px">${c.times.join(' · ')} daily${c.planned_day?' · planned through '+esc(c.planned_day):''}</div></div></div>
+  ${c.scheduled.length?`<div class="muted" style="font-size:12px;margin-bottom:4px">UPCOMING ON YOUTUBE</div>`+c.scheduled.slice(0,4).map(x=>`<div class="hl"><span class="dot ok"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(x.title)}</span><b style="max-width:none">${fmtWhen(x.publish_at)}</b></div>`).join(''):'<div class="muted" style="font-size:12.5px">Nothing scheduled yet.</div>'}`}
+async function toggleSched(on,times){try{await api('/schedule','POST',{enabled:on,times:times.split(',')})}catch(e){alert(e.message)}loadDash()}
+async function loadSched(){try{const c=await api('/schedule');$('asOn').checked=c.enabled;$('asTimes').value=c.times.join(',')}catch{}}
+async function saveSched(){try{const c=await api('/schedule','POST',{enabled:$('asOn').checked,times:$('asTimes').value.split(/[\s,]+/).filter(Boolean)});$('asMsg').textContent=c.enabled?'Saved — tomorrow gets scheduled automatically.':'Saved (off).'}catch(e){$('asMsg').textContent=e.message}}
+async function batchGo(){const urls=$('bUrls').value.split(/\s+/).filter(Boolean),m=$('bMsg'),b=$('bBtn');if(!urls.length){m.textContent='Paste at least one link.';return}
+ const ok=$('bOk').checked;if(ok&&!$('bDate').value)$('bDate').value=new Date().toISOString().slice(0,10);
+ b.disabled=true;m.textContent='Starting…';
+ try{let r=await api('/downloads/batch','POST',{urls,permission:ok?{how:$('bHow').value,date:$('bDate').value,proof:$('bProof').value.trim()}:null});
+  const draw=r=>{$('bList').innerHTML=r.items.map(i=>`<div class="hl" style="padding:5px 0"><span class="pill ${i.status==='ready'?'published':i.status==='failed'?'failed':i.status==='downloaded'?'pending_review':''}" style="margin:0">${i.status}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.url)}</span><span class="muted" style="font-size:12px">${esc(i.error||i.note||'')}</span></div>`).join('')};
+  draw(r);while(!r.done){await new Promise(x=>setTimeout(x,2000));r=await api('/downloads/batch/'+r.id);draw(r);m.textContent=`${r.items.filter(i=>!['queued','downloading'].includes(i.status)).length}/${r.items.length} done…`}
+  const n=r.items.filter(i=>i.status==='ready').length;m.textContent=ok?`✓ ${n} video${n===1?'':'s'} ready to post.`:'Downloaded. Tick the confirmation to mark them ready.';loadDownloads()}
+ catch(e){m.textContent=e.message}b.disabled=false}
+/* ---------- daily ideas ---------- */
+let IDC=null,IDT=null;
+function dashIdeas(r){const d=r&&r.data;
+ if(!d){$('dIdMeta').textContent=r&&r.running?r.progress:'';$('dIdeas').innerHTML='<div class="empty" style="grid-column:1/-1"><b>'+(r&&r.running?'Generating…':'No ideas yet')+'</b>They are generated automatically once a day.<div class="acts" style="justify-content:center"><button class="sm" onclick="show(\'ideas\')">Open Daily ideas</button></div></div>';return}
+ $('dIdMeta').textContent=`${d.date}${d.region?' · '+d.region:''}`;
+ $('dIdeas').innerHTML=d.categories.filter(c=>c.ideas.length).map(c=>{const i=c.ideas[0];return `<div class="tile" onclick="IDC='${c.id}';show('ideas')"><div class="c">${c.id===d.hot_niche?'🔥 ':''}${esc(c.label)}<span style="margin-left:auto">${c.ideas.length}</span></div><div class="h">${esc(i.highlight)}</div><div class="t">${esc(i.title)}</div></div>`}).join('')||'<div class="muted">No ideas could be generated.</div>'}
+async function loadIdeas(){clearTimeout(IDT);let r;try{r=await api('/daily')}catch(e){$('idBody').innerHTML=`<div class="card empty">${esc(e.message)}</div>`;return}
+ const d=r.data;$('idBtn').disabled=r.running;$('idBtn').textContent=r.running?`Generating… ${r.progress}`:"↻ Generate today's ideas";
+ if(r.running)IDT=setTimeout(()=>{if($('t-ideas').classList.contains('on'))loadIdeas()},3000);
+ if(!d){$('idHot').textContent="No ideas yet";$('idMeta').textContent=r.running?'The first batch is being written…':'Press generate, or wait for the daily run (needs a working LLM).';$('idSeg').innerHTML='';$('idBody').innerHTML='';return}
+ const hot=d.categories.find(c=>c.id===d.hot_niche);
+ $('idHot').textContent=hot?`🔥 Hottest niche this week: ${hot.label}`:"Today's ideas";
+ $('idMeta').textContent=`${d.date} · region ${d.region} · ${d.categories.reduce((n,c)=>n+c.ideas.length,0)} scripts in ${d.categories.length} categories${r.youtube?'':' · YouTube data not configured, ideas use the model’s own knowledge'}${d.errors&&d.errors.length?' · '+d.errors.length+' problem(s): '+d.errors.slice(0,2).join(' | '):''}`;
+ if(!IDC||!d.categories.some(c=>c.id===IDC))IDC=(d.categories.find(c=>c.ideas.length)||d.categories[0]).id;
+ $('idSeg').innerHTML=d.categories.map(c=>`<button class="${c.id===IDC?'on':''}" onclick="IDC='${c.id}';loadIdeas()">${c.id===d.hot_niche?'🔥 ':''}${esc(c.label)}<span class="n">${c.ideas.length}</span></button>`).join('');
+ const c=d.categories.find(x=>x.id===IDC);
+ const ev=c.evidence.slice(0,3).map(e=>`<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title.slice(0,60))}</a> <span class="muted">${nf(e.views)}</span>`).join(' · ');
+ $('idBody').innerHTML=(ev?`<div class="muted" style="font-size:12.5px;margin-bottom:12px">Working on YouTube this week: ${ev}</div>`:'')+(c.ideas.map((i,k)=>`<div class="card idea"><span class="hl-tag">${esc(i.highlight)}</span><h3>${esc(i.title)}</h3><div class="muted" style="font-size:13px">${esc(i.topic)}</div><div class="hook">“${esc(i.hook)}”</div>
+  <details open><summary>${i.scenes.length} scenes · AI video prompts</summary><ol>${i.scenes.map(x=>`<li>${esc(x.narration)}<div class="vis">🎬 ${esc(x.visual)}</div></li>`).join('')}</ol></details>
+  <div class="muted" style="font-size:12px">Search on Instagram:</div><div class="tags">${i.ig_search_tags.map(t=>`<a href="https://www.instagram.com/explore/tags/${esc(t)}/" target="_blank" rel="noopener">#${esc(t)}</a>`).join('')}</div>
+  <div class="acts"><button onclick="makeIdea('${c.id}',${k},true)">🎞 Make with AI video</button><button class="alt" onclick="makeIdea('${c.id}',${k},false)">Make (stock / drawn)</button><button class="ghost" onclick="copyTags(${k})">⧉ Copy hashtags</button></div></div>`).join('')||'<div class="card empty"><b>No ideas for this category</b>Generation failed for it; press generate to retry.</div>')}
+async function copyTags(k){const d=(await api('/daily')).data,c=d.categories.find(x=>x.id===IDC),i=c.ideas[k];try{await navigator.clipboard.writeText(i.ig_search_tags.map(t=>'#'+t).join(' ')+' '+i.hashtags.map(t=>'#'+t).join(' '));alert('Hashtags copied')}catch{alert(i.ig_search_tags.map(t=>'#'+t).join(' '))}}
+async function makeIdea(cat,idx,ai){try{const j=await api('/daily/make','POST',{category:cat,index:idx,ai_video:ai,ai_provider:'ltx',ai_mode:'t2v'});
+ if(DRAFT)await discardDraft(true);DRAFT={id:j.id,script:j.script};SEEN.push(j.script.title);show('create');showDraft();$('msg').textContent='Script ready — read it below, then approve to render.'}catch(e){alert(e.message)}}
+async function refreshIdeas(){try{await api('/daily/refresh','POST')}catch(e){if(!/Already/.test(e.message)){alert(e.message);return}}loadIdeas()}
+async function optimizeJob(id,b){b.disabled=true;b.textContent='Optimizing…';try{await api('/optimize/'+id,'POST')}catch(e){alert(e.message)}loadJobs()}
+async function optimizeDraft(b){b.disabled=true;b.textContent='Optimizing…';try{const r=await api('/optimize/'+DRAFT.id,'POST');DRAFT.script=r.script;showDraft();$('msg').textContent='Title, caption and hashtags optimized.'}catch(e){$('msg').textContent=e.message;b.disabled=false;b.textContent='✨ Optimize caption & hashtags'}}
 init();
 </script></body></html>

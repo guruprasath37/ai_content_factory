@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio, json, math, os, queue, re, shutil, sqlite3, subprocess, threading, time, uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +9,7 @@ import edge_tts
 import numpy as np
 import requests
 from dotenv import load_dotenv
-from . import aivideo, analytics, apiframe, google_yt, kling, llm, niche
+from . import aivideo, analytics, apiframe, google_yt, kling, llm, niche, seo, trending, daily
 from . import series as sr
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
@@ -36,6 +36,19 @@ async def lifespan(_app):
     yield
 
 app = FastAPI(title="AI Content Factory", version="0.2.0", lifespan=lifespan)
+
+@app.middleware("http")
+async def require_password(request: Request, call_next):
+    """HTTP Basic auth on everything when APP_PASSWORD is set (any username). Needed once the app is reachable beyond localhost."""
+    pw = os.getenv("APP_PASSWORD")
+    if pw:
+        import base64, secrets
+        from fastapi.responses import Response
+        try: given = base64.b64decode(request.headers.get("authorization", "")[6:]).decode().partition(":")[2]
+        except Exception: given = ""
+        if not secrets.compare_digest(given.encode(), pw.encode()):
+            return Response("Password required", 401, headers={"WWW-Authenticate": 'Basic realm="AI Content Factory"'})
+    return await call_next(request)
 
 
 SCHEMA = """
@@ -715,6 +728,38 @@ def create_job(series, niche, topic, language, duration, made_for_kids=None, sou
         raise
     finally: con.close()
 
+SEO_STATES = ("script_ready", "pending_review", "approved", "publish_failed", "render_failed")
+
+def seo_apply(job_id: str) -> dict:
+    """Rewrite a job's title, description and hashtags with the LLM (YouTube-Shorts-aware, relevance-checked). The old values are kept in script_json['seo']."""
+    con = db(); job = con.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not job: con.close(); raise HTTPException(404, "Job not found")
+    if job["status"] not in SEO_STATES: con.close(); raise HTTPException(409, f"Cannot change the caption of a {job['status']} video")
+    data = json.loads(job["script_json"] or "{}"); tags = json.loads(job["hashtags"] or "[]")
+    label = (sr.SERIES.get(job["series"]) or {}).get("label", "").split(" — ")[0]
+    narration = " ".join(sc.get("narration", "") for sc in data.get("scenes", [])) or (job["description"] or "")
+    hot = [k["word"] for k in ((trending_cached() or {}).get("keywords") or [])]
+    try:
+        out = seo.optimize({"title": job["title"], "description": job["description"], "hashtags": tags, "narration": narration,
+                            "topic": data.get("topic") or job["topic"], "highlight": data.get("highlight"), "series_label": label if job["series"] != "general" else ""}, hot)
+    except Exception as e:
+        con.close(); raise HTTPException(500, f"Caption optimisation failed, nothing changed: {str(e)[:300]}")
+    prev = (data.get("seo") or {}).get("previous") or {"title": job["title"], "description": job["description"], "hashtags": tags}
+    data.update(title=out["title"], description=out["description"], hashtags=out["hashtags"], seo={"optimized_at": now(), "keywords": out["keywords"], "previous": prev,
+                "model": f"{llm.LAST['provider']}:{llm.LAST['model']}"})
+    con.execute("UPDATE jobs SET updated_at=?,title=?,description=?,hashtags=?,script_json=? WHERE id=?", (now(), out["title"], out["description"], json.dumps(out["hashtags"]), json.dumps(data, ensure_ascii=False), job_id))
+    con.commit(); con.close()
+    return {"id": job_id, "title": out["title"], "description": out["description"], "hashtags": out["hashtags"], "keywords": out["keywords"], "script": data}
+
+@app.post("/optimize/{job_id}")
+def optimize_caption(job_id: str):
+    return seo_apply(job_id)
+
+def seo_auto(job_id: str):
+    if os.getenv("SEO_AUTO", "1") == "0": return
+    try: seo_apply(job_id)
+    except Exception as e: ap_log(f"Caption optimisation skipped for {job_id}: {str(getattr(e, 'detail', e))[:160]}")
+
 RENDER_LOCK = threading.Lock()   # one heavy render at a time (manual and autopilot share it)
 
 def do_render(job_id):
@@ -731,6 +776,7 @@ def do_render(job_id):
                     fresh = con.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
                     video, audio, srt, prov = render_job(fresh)
                     con.execute("UPDATE jobs SET status='pending_review',updated_at=?,attempts=attempts+?,video_path=?,audio_path=?,srt_path=?,provenance=?,error=NULL WHERE id=?", (now(), attempt, str(video), str(audio), str(srt), json.dumps(prov), job_id)); con.commit()
+                    seo_auto(job_id)
                     return {"id": job_id, "status": "pending_review", "video_url": f"/video/{job_id}", "message": "Video rendered. Review it before approving.", "provenance": prov}
                 except Exception as e: last_error = e
             raise last_error or RuntimeError("render failed")
@@ -1011,6 +1057,9 @@ def worker_loop():
                 if cfg["enabled"] and (not last or (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() >= cfg["interval_hours"] * 3600):
                     task = ("batch", cfg["per_run"])
             except Exception as e: ap_log(f"scheduler error: {e}")
+            for fn in (autoplan, trending_daily, daily_auto):
+                try: fn()
+                except Exception as e: ap_log(f"{fn.__name__} error: {str(e)[:200]}")
         if not task: continue
         try:
             cfg = ap_config()
@@ -1205,9 +1254,9 @@ def _playable(video: Path) -> Path:
     except Exception as e:
         print(f"[download] kept original codec: {str(e)[:200]}"); return video
 
-@app.post("/downloads/instagram")
-def download_instagram(req: DownloadRequest):
-    m = IG_URL.match(req.url.strip())
+def _fetch_instagram(raw_url: str) -> list[dict]:
+    """Download one public Instagram post/reel into downloads/ and return its metadata. Raises HTTPException on failure."""
+    m = IG_URL.match(raw_url.strip())
     if not m: raise HTTPException(422, "Paste a link to an Instagram post or reel, like https://www.instagram.com/reel/ABC123/")
     ytdlp = os.getenv("YTDLP_BIN") or shutil.which("yt-dlp") or ("/opt/homebrew/bin/yt-dlp" if Path("/opt/homebrew/bin/yt-dlp").exists() else None)
     if not ytdlp: raise HTTPException(500, "yt-dlp is not installed. Run: brew install yt-dlp")
@@ -1228,7 +1277,7 @@ def download_instagram(req: DownloadRequest):
         video = _playable(video)
         try: secs = d.get("duration") or round(probe_duration(video), 1)   # Instagram often omits it
         except Exception: secs = None
-        meta = {"source_url": req.url.strip(), "post": url, "handle": d.get("channel") or d.get("uploader_id"), "uploader": d.get("uploader"),
+        meta = {"source_url": raw_url.strip(), "post": url, "handle": d.get("channel") or d.get("uploader_id"), "uploader": d.get("uploader"),
                 "title": (d.get("title") or "")[:120], "caption": (d.get("description") or "")[:500], "duration": secs, "width": d.get("width"), "height": d.get("height")}
         video.with_suffix(".json").write_text(json.dumps(meta, ensure_ascii=False))
         items.append(_dl_meta(video))
@@ -1241,7 +1290,11 @@ def download_instagram(req: DownloadRequest):
         elif "no video" in low or "no formats" in low: hint = "That post has no video (it is a photo-only post)."
         else: hint = "Download failed. Try `brew upgrade yt-dlp` (Instagram changes often)."
         raise HTTPException(502, f"{hint} Details: {err[0][:300]}")
-    return {"items": items}
+    return items
+
+@app.post("/downloads/instagram")
+def download_instagram(req: DownloadRequest):
+    return {"items": _fetch_instagram(req.url)}
 
 @app.get("/downloads")
 def list_downloads():
@@ -1267,39 +1320,220 @@ class PermissionRecord(BaseModel):
     date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     proof: str = Field(default="", max_length=500)          # link to the message/comment or a note on where the screenshot is
 
-@app.post("/downloads/{name}/permission")
-def record_permission(name: str, rec: PermissionRecord):
-    p = DOWNLOADS / name
-    if not DL_NAME.match(name) or not p.exists() or p.suffix == ".json": raise HTTPException(404, "File not found")
+def _save_permission(p: Path, rec: PermissionRecord) -> dict:
     meta_p = p.with_suffix(".json"); meta = json.loads(meta_p.read_text()) if meta_p.exists() else {}
     meta["permission"] = {**rec.model_dump(), "recorded_at": now()}
     meta_p.write_text(json.dumps(meta, ensure_ascii=False))
     return _dl_meta(p)
+
+@app.post("/downloads/{name}/permission")
+def record_permission(name: str, rec: PermissionRecord):
+    p = DOWNLOADS / name
+    if not DL_NAME.match(name) or not p.exists() or p.suffix == ".json": raise HTTPException(404, "File not found")
+    return _save_permission(p, rec)
 
 class ToReview(BaseModel):
     title: str = Field(min_length=3, max_length=100)
     description: str = Field(default="", max_length=3000)
     hashtags: list[str] = Field(default_factory=list, max_length=15)
 
-@app.post("/downloads/{name}/to-review")
-def download_to_review(name: str, req: ToReview):
-    """Turn a downloaded reel whose creator gave permission into a job in Review (unchanged video, credit added when published)."""
-    p = DOWNLOADS / name
-    if not DL_NAME.match(name) or not p.exists() or p.suffix == ".json": raise HTTPException(404, "File not found")
+def _licensed_job(p: Path, title: str, description: str, hashtags: list[str], status: str) -> str:
+    """Turn a downloaded reel whose creator gave permission into a job (unchanged video, credit added when published)."""
     meta = _dl_meta(p); perm = meta.get("permission")
     if not perm: raise HTTPException(409, "Record the creator's permission first")
     job_id = uuid.uuid4().hex[:12]; video = CONTENT / f"{job_id}.mp4"
     shutil.copyfile(p, video)
-    lic = {"handle": meta.get("handle"), "uploader": meta.get("uploader"), "post": meta.get("post"), "file": name, "permission": perm}
-    tags = [re.sub(r"[^\w]", "", t) for t in req.hashtags if re.sub(r"[^\w]", "", t)][:15]
-    data = {"series": "licensed", "licensed": lic, "made_for_kids": False, "title": req.title}
+    lic = {"handle": meta.get("handle"), "uploader": meta.get("uploader"), "post": meta.get("post"), "file": p.name, "permission": perm}
+    tags = [re.sub(r"[^\w]", "", t) for t in hashtags if re.sub(r"[^\w]", "", t)][:15]
+    data = {"series": "licensed", "licensed": lic, "made_for_kids": False, "title": title}
     prov = {"licensed": lic, "visuals": {"sources": ["licensed"], "counts": {"licensed": 1}, "ai_requested": False}}
     con = db()
     con.execute("INSERT INTO jobs(id,created_at,updated_at,niche,status,series,topic,source,title,description,hashtags,script_json,video_path,provenance) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (job_id, now(), now(), "licensed", "pending_review", "licensed", req.title, "licensed", req.title, req.description, json.dumps(tags), json.dumps(data, ensure_ascii=False), str(video), json.dumps(prov, ensure_ascii=False)))
+                (job_id, now(), now(), "licensed", status, "licensed", title, "licensed", title, description, json.dumps(tags), json.dumps(data, ensure_ascii=False), str(video), json.dumps(prov, ensure_ascii=False)))
     con.commit(); con.close()
     meta_p = p.with_suffix(".json"); m = json.loads(meta_p.read_text()); m.setdefault("jobs", []).append(job_id); meta_p.write_text(json.dumps(m, ensure_ascii=False))
-    return {"id": job_id, "status": "pending_review"}
+    return job_id
+
+@app.post("/downloads/{name}/to-review")
+def download_to_review(name: str, req: ToReview):
+    p = DOWNLOADS / name
+    if not DL_NAME.match(name) or not p.exists() or p.suffix == ".json": raise HTTPException(404, "File not found")
+    return {"id": _licensed_job(p, req.title, req.description, req.hashtags, "pending_review"), "status": "pending_review"}
+
+# ---------------------------------------------------------------- batch: many Instagram links -> ready-to-schedule videos
+class BatchRequest(BaseModel):
+    urls: list[str] = Field(min_length=1, max_length=50)
+    permission: PermissionRecord | None = None   # your attestation that every creator in this batch agreed to the re-post; without it videos are only downloaded
+
+BATCHES: dict[str, dict] = {}
+
+def _caption_title(meta: dict) -> tuple[str, str, list[str]]:
+    cap = meta.get("caption") or meta.get("title") or ""
+    title = re.sub(r"\s+", " ", re.sub(r"#\S+", "", cap)).strip()[:90] or f"Reel by @{meta.get('handle') or 'creator'}"
+    return title, "", re.findall(r"#\w+", cap)[:10] + ["Shorts"]
+
+def _run_batch_download(bid: str, perm: PermissionRecord | None):
+    b = BATCHES[bid]
+    for it in b["items"]:
+        it["status"] = "downloading"
+        try:
+            for meta in _fetch_instagram(it["url"]):
+                p = DOWNLOADS / meta["file"]
+                if (_dl_meta(p).get("jobs")): it["note"] = "already in the library"; it["status"] = "ready"; it.setdefault("jobs", []).extend(_dl_meta(p)["jobs"]); continue
+                if perm:
+                    _save_permission(p, perm); t, d, tags = _caption_title(meta)
+                    jid = _licensed_job(p, t, d, tags, "approved"); it.setdefault("jobs", []).append(jid); it["status"] = "ready"; seo_auto(jid)
+                else:
+                    it["status"] = "downloaded"; it["note"] = "no permission recorded, so it is not marked ready"
+                it["file"] = meta["file"]
+        except HTTPException as e: it["status"] = "failed"; it["error"] = str(e.detail)[:300]
+        except Exception as e: it["status"] = "failed"; it["error"] = str(e)[:300]
+        time.sleep(2)   # be gentle with Instagram's rate limits
+    b["done"] = True
+
+@app.post("/downloads/batch")
+def download_batch(req: BatchRequest):
+    """Send many public Instagram post/reel links. Each is downloaded in the background; with `permission` supplied the videos become
+    'approved' jobs (ready), which the daily plan / auto-schedule then publishes to YouTube. Poll GET /downloads/batch/{id}."""
+    urls = list(dict.fromkeys(u.strip() for u in req.urls if u.strip()))
+    bad = [u for u in urls if not IG_URL.match(u)]
+    if bad: raise HTTPException(422, f"Not Instagram post/reel links: {bad[:3]}")
+    if not urls: raise HTTPException(422, "No links given")
+    bid = uuid.uuid4().hex[:8]
+    BATCHES[bid] = {"id": bid, "created_at": now(), "done": False, "permission": bool(req.permission), "items": [{"url": u, "status": "queued"} for u in urls]}
+    for old in sorted(BATCHES, key=lambda k: BATCHES[k]["created_at"])[:-20]: BATCHES.pop(old, None)
+    threading.Thread(target=_run_batch_download, args=(bid, req.permission), daemon=True, name=f"batch-{bid}").start()
+    return BATCHES[bid]
+
+@app.get("/downloads/batch/{bid}")
+def download_batch_status(bid: str):
+    if bid not in BATCHES: raise HTTPException(404, "Unknown batch (the server may have restarted)")
+    return BATCHES[bid]
+
+# ---------------------------------------------------------------- scheduling
+SCHED_DEFAULT = {"enabled": False, "times": ["09:00", "14:00", "19:00"]}
+
+def sched_config() -> dict:
+    return {**SCHED_DEFAULT, **json.loads(get_setting("autoschedule") or "{}")}
+
+class SchedConfig(BaseModel):
+    enabled: bool
+    times: list[str] = Field(min_length=1, max_length=6)
+
+@app.get("/schedule")
+def schedule_get():
+    con = db(); ready = con.execute("SELECT COUNT(*) FROM jobs WHERE status='approved' AND youtube_id IS NULL").fetchone()[0]
+    sched = [dict(r) for r in con.execute("SELECT id,title,publish_at FROM jobs WHERE youtube_id IS NOT NULL AND publish_at > ? ORDER BY publish_at LIMIT 20", (now(),))]; con.close()
+    return {**sched_config(), "ready": ready, "scheduled": sched, "planned_day": get_setting("autoschedule_day")}
+
+@app.post("/schedule")
+def schedule_set(c: SchedConfig):
+    if not all(re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t) for t in c.times): raise HTTPException(422, "Times must be HH:MM (24-hour)")
+    set_setting("autoschedule", json.dumps({"enabled": c.enabled, "times": c.times})); set_setting("autoschedule_attempt", "")
+    return schedule_get()
+
+def autoplan():
+    """Once per day, when enabled: schedule tomorrow's slots from the approved (ready) videos. Retried at most hourly."""
+    cfg = sched_config()
+    if not cfg["enabled"]: return
+    day = (datetime.now().astimezone() + timedelta(days=1)).date().isoformat()
+    if get_setting("autoschedule_day") == day: return
+    last = get_setting("autoschedule_attempt")
+    if last and (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() < 3600: return
+    con = db(); ready = con.execute("SELECT COUNT(*) FROM jobs WHERE status='approved' AND youtube_id IS NULL").fetchone()[0]; con.close()
+    if not ready: return
+    set_setting("autoschedule_attempt", now())
+    slots = [datetime.fromisoformat(f"{day}T{t}").astimezone().astimezone(timezone.utc).isoformat() for t in cfg["times"]]
+    res = plan_day(DayPlan(slots=slots))["results"]
+    ok = [r for r in res if not r.get("error")]
+    ap_log(f"Auto-schedule {day}: {len(ok)}/{len(res)} slots scheduled" + (f" ({res[0]['error'][:120]})" if not ok else ""))
+    if ok: set_setting("autoschedule_day", day)
+
+# ---------------------------------------------------------------- trending topics (refreshed daily)
+def trending_cached() -> dict | None:
+    return json.loads(get_setting("trending") or "null")
+
+def trending_refresh() -> dict:
+    res = trending.fetch(os.getenv("TRENDING_REGION", "IN"))
+    set_setting("trending", json.dumps(res)); return res
+
+def trending_daily():
+    if not google_yt.available(): return
+    c = trending_cached(); last = get_setting("trending_attempt")
+    if c and (datetime.now(timezone.utc) - datetime.fromisoformat(c["fetched_at"])).total_seconds() < 86400: return
+    if last and (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() < 3600: return
+    set_setting("trending_attempt", now())
+    try: trending_refresh(); ap_log("Trending topics refreshed")
+    except Exception as e: ap_log(f"Trending refresh failed: {str(e)[:200]}")
+
+# ---------------------------------------------------------------- daily ideas (categories -> scene scripts + Instagram tags)
+DAILY: dict[str, Any] = {"running": False, "progress": "", "partial": None}
+
+def daily_cached() -> dict | None:
+    return json.loads(get_setting("daily_ideas") or "null")
+
+def _daily_run():
+    DAILY.update(running=True, progress="starting", partial=None)
+    try:
+        def seen(res): DAILY["partial"] = res; DAILY["progress"] = f"{len(res['categories'])}/{len(daily.CATEGORIES)} categories"
+        res = daily.build(os.getenv("TRENDING_REGION", "IN"), seen, daily_cached())
+        if any(c["ideas"] for c in res["categories"]): set_setting("daily_ideas", json.dumps(res, ensure_ascii=False))   # keep yesterday's if everything failed
+        ap_log(f"Daily ideas: {sum(len(c['ideas']) for c in res['categories'])} ideas" + (f" ({len(res['errors'])} problems)" if res["errors"] else ""))
+    except Exception as e: ap_log(f"Daily ideas failed: {str(e)[:200]}")
+    finally: DAILY.update(running=False, progress="")
+
+def daily_start() -> bool:
+    if DAILY["running"]: return False
+    threading.Thread(target=_daily_run, daemon=True, name="daily-ideas").start(); return True
+
+def daily_auto():
+    c = daily_cached()
+    if c and c.get("date") == datetime.now().astimezone().date().isoformat(): return
+    last = get_setting("daily_attempt")
+    if last and (datetime.now(timezone.utc) - datetime.fromisoformat(last)).total_seconds() < 3600: return
+    if not llm.status().get("ready"): return
+    set_setting("daily_attempt", now()); daily_start()
+
+@app.get("/daily")
+def daily_get():
+    return {"running": DAILY["running"], "progress": DAILY["progress"], "youtube": google_yt.available(), "data": DAILY["partial"] if DAILY["running"] and DAILY["partial"] else daily_cached()}
+
+@app.post("/daily/refresh")
+def daily_refresh():
+    if not daily_start(): raise HTTPException(409, "Already generating today's ideas")
+    return {"started": True}
+
+class DailyMake(BaseModel):
+    category: str
+    index: int = Field(ge=0)
+    ai_video: bool = False
+    ai_provider: str = Field(default="ltx", pattern="^(ltx|kling|apiframe|gemini)$")
+    ai_mode: str = Field(default="t2v", pattern="^(t2v|i2v)$")
+
+@app.post("/daily/make")
+def daily_make(req: DailyMake):
+    """Turn one of today's ideas into a script_ready job (no extra LLM call), ready to approve and render."""
+    data = daily_cached() or {}
+    cat = next((c for c in data.get("categories", []) if c["id"] == req.category), None)
+    if not cat or req.index >= len(cat["ideas"]): raise HTTPException(404, "No such idea")
+    sc = dict(cat["ideas"][req.index])
+    sc.update(made_for_kids=False, duration_seconds=data.get("duration", 30), language="English", ai_video=req.ai_video, ai_provider=req.ai_provider, ai_mode=req.ai_mode,
+              script_source=f"daily:{req.category}", daily_category=req.category)
+    job_id = uuid.uuid4().hex[:12]; con = db()
+    con.execute("INSERT INTO jobs(id,created_at,updated_at,niche,status,series,topic,source,title,description,hashtags,script_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                (job_id, now(), now(), cat["label"], "script_ready", "general", sc["topic"], "daily", sc["title"], sc["description"], json.dumps(sc["hashtags"]), json.dumps(sc, ensure_ascii=False)))
+    con.commit(); con.close()
+    return {"id": job_id, "status": "script_ready", "script": sc}
+
+@app.get("/trending")
+def trending_get():
+    return {"available": google_yt.available(), "region": os.getenv("TRENDING_REGION", "IN"), "data": trending_cached()}
+
+@app.post("/trending/refresh")
+def trending_now():
+    if not google_yt.available(): raise HTTPException(400, "Set GOOGLE_APPLICATION_CREDENTIALS or YOUTUBE_API_KEY in .env")
+    try: return trending_refresh()
+    except Exception as e: raise HTTPException(500, f"Trending fetch failed: {str(e)[:300]}")
 
 class DayPlan(BaseModel):
     slots: list[str] = Field(min_length=1, max_length=6)   # ISO times, in order
@@ -1311,9 +1545,11 @@ def plan_day(plan: DayPlan):
     lic = [r["id"] for r in rows if r["source"] == "licensed"]; own = [r["id"] for r in rows if r["source"] != "licensed"]
     want = ["licensed", "own", "licensed", "own", "licensed", "own"][:len(plan.slots)]
     picks, results = [], []
-    for kind in want: picks.append((lic if kind == "licensed" else own).pop(0) if (lic if kind == "licensed" else own) else None)
+    for kind in want:
+        pool = (lic if kind == "licensed" else own) or (own if kind == "licensed" else lic)   # fall back to the other kind
+        picks.append(pool.pop(0) if pool else None)
     for slot, (kind, jid) in zip(plan.slots, zip(want, picks)):
-        if not jid: results.append({"slot": slot, "kind": kind, "error": f"no approved {kind} video waiting"}); continue
+        if not jid: results.append({"slot": slot, "kind": kind, "error": "no approved video waiting"}); continue
         try: results.append({"slot": slot, "kind": kind, **publish_youtube(jid, PublishOptions(publish_at=slot))})
         except HTTPException as e: results.append({"slot": slot, "kind": kind, "id": jid, "error": e.detail})
     return {"results": results}
